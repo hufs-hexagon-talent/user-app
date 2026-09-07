@@ -78,6 +78,7 @@
   },
   "packageManager": "yarn@1.22.22",
   "jest": {
+    "globalSetup": "<rootDir>/jest.globalSetup.js",
     "transformIgnorePatterns": [
       "node_modules/(?!axios)/"
     ]
