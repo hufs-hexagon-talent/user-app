@@ -10,7 +10,7 @@ import {
 
 import { useDeleteInquiry, useMyInquiries } from '../../api/inquiry.api';
 
-import MyInquiries, { resolvedToggleLabel } from './MyInquiries';
+import MyInquiries, { STALE_MESSAGE } from './MyInquiries';
 
 jest.mock('../../api/inquiry.api', () => ({
   useMyInquiries: jest.fn(),
@@ -41,7 +41,11 @@ const OPEN_INQUIRY = {
   adminMemo: null,
   reservationId: null,
   reservationSummary: null,
+  roomId: 1,
+  roomName: '306',
+  occurredAt: null,
   createAt: '2026-09-01T10:00:00',
+  resolvedAt: null,
 };
 
 const RESOLVED_INQUIRY = {
@@ -53,6 +57,7 @@ const RESOLVED_INQUIRY = {
   reservationId: 10,
   reservationSummary: '2026-08-30 10:00~11:00 201-A',
   createAt: '2026-08-30T09:00:00',
+  resolvedAt: '2026-08-30T11:40:00',
 };
 
 const mockList = (data, over = {}) =>
@@ -73,33 +78,47 @@ beforeEach(() => {
 
 const itemOf = text => screen.getByText(text).closest('li');
 const openItem = () => itemOf(OPEN_INQUIRY.content);
-const resolvedToggle = () =>
-  screen.getByRole('button', { name: /^처리완료 \d+건/ });
-const expandResolved = () => fireEvent.click(resolvedToggle());
 const resolvedItem = () => itemOf(RESOLVED_INQUIRY.content);
-
 const openDeleteModal = item =>
   fireEvent.click(within(item).getByRole('button', { name: '삭제' }));
 
-describe('resolvedToggleLabel', () => {
-  it('답변이 있으면 건수를 덧붙이고 없으면 처리완료 건수만', () => {
-    expect(resolvedToggleLabel(3, 0)).toBe('처리완료 3건');
-    expect(resolvedToggleLabel(3, 2)).toBe('처리완료 3건 · 관리자 답변 2건');
-  });
-});
-
 describe('MyInquiries', () => {
-  it('제목은 1:1 문의다', () => {
+  it('제목은 내 문의다', () => {
     render(<MyInquiries />);
 
     expect(
-      screen.getByRole('heading', { name: '1:1 문의' }),
+      screen.getByRole('heading', { name: '내 문의' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/1:1/)).toBeNull();
+  });
+
+  // 위쪽 카드가 무슨 무리인지 화면이 말하지 않았다. 두 섹션 모두 제목을 갖고, 접지 않는다.
+  it('답변 대기·답변 완료 섹션을 건수와 함께 항상 펼쳐 보여준다', () => {
+    render(<MyInquiries />);
+
+    expect(
+      screen.getByRole('heading', { name: '답변 대기 1건' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '답변 완료 1건' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(OPEN_INQUIRY.content)).toBeInTheDocument();
+    expect(screen.getByText(RESOLVED_INQUIRY.content)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /답변 완료/ })).toBeNull();
+  });
+
+  it('한쪽이 0건이면 그 섹션은 그리지 않는다', () => {
+    mockList([RESOLVED_INQUIRY]);
+    render(<MyInquiries />);
+
+    expect(screen.queryByRole('heading', { name: /답변 대기/ })).toBeNull();
+    expect(
+      screen.getByRole('heading', { name: '답변 완료 1건' }),
     ).toBeInTheDocument();
   });
 
-  it('접수됨 상태인 문의만 수정·삭제 버튼을 보여준다', () => {
+  it('답변 대기 문의만 수정·삭제 버튼을 보여준다', () => {
     render(<MyInquiries />);
-    expandResolved();
 
     expect(
       within(openItem()).getByRole('button', { name: '수정' }),
@@ -117,61 +136,116 @@ describe('MyInquiries', () => {
 
   it('유형과 상태 배지를 함께 보여준다', () => {
     render(<MyInquiries />);
-    expandResolved();
 
     expect(
       within(openItem()).getByText('시설·키오스크 고장'),
     ).toBeInTheDocument();
-    expect(within(openItem()).getByText('접수됨')).toBeInTheDocument();
+    expect(within(openItem()).getByText('답변 대기')).toBeInTheDocument();
     expect(
       within(resolvedItem()).getByText('출석·예약 이의'),
     ).toBeInTheDocument();
-    expect(within(resolvedItem()).getByText('처리완료')).toBeInTheDocument();
+    expect(within(resolvedItem()).getByText('답변 완료')).toBeInTheDocument();
   });
 
-  it('완료된 문의는 처리 메모를 보여준다', () => {
+  // 학생은 답변을 보러 온다. 답변이 본문보다 먼저 온다.
+  it('답변 완료 카드는 관리자 답변 박스를 답변 시각과 함께 본문 위에 그린다', () => {
     render(<MyInquiries />);
-    expandResolved();
 
+    const item = resolvedItem();
     expect(
-      within(resolvedItem()).getByText(/확인 후 출석 처리했습니다\./),
+      within(item).getByText('관리자 답변 · 2026-08-30 11:40'),
     ).toBeInTheDocument();
-    expect(within(openItem()).queryByText(/처리 메모/)).toBeNull();
+    expect(within(item).getByText('내 문의')).toBeInTheDocument();
+    expect(within(item).queryByText(/처리 메모/)).toBeNull();
+    const answer = within(item).getByText('확인 후 출석 처리했습니다.');
+    const body = within(item).getByText(RESOLVED_INQUIRY.content);
+    expect(
+      answer.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
-  it('연결된 예약 요약을 카드에 보여주고, 예약이 지워졌으면 취소된 예약이라고 적는다', () => {
+  // 관리자가 재오픈하면 status 는 OPEN 인데 답변은 남아 있다. 숨기면 학생은 답변을 잃는다.
+  it('재오픈된 문의는 답변 대기 섹션에서 이전 답변을 시각 없이 보여준다', () => {
+    mockList([{ ...OPEN_INQUIRY, adminMemo: '자리를 다시 확인해 주세요.' }]);
+    render(<MyInquiries />);
+
+    const item = openItem();
+    expect(within(item).getByText('이전 답변')).toBeInTheDocument();
+    expect(
+      within(item).getByText('자리를 다시 확인해 주세요.'),
+    ).toBeInTheDocument();
+    expect(within(item).queryByText(/이전 답변 ·/)).toBeNull();
+    expect(
+      within(item).getByRole('button', { name: '수정' }),
+    ).toBeInTheDocument();
+  });
+
+  it('답변 완료는 답변한 순서로, 새 답변이 맨 위에 온다', () => {
+    const older = {
+      ...RESOLVED_INQUIRY,
+      inquiryId: 5,
+      content: '오래된 답변',
+      createAt: '2026-08-01T00:00:00',
+      resolvedAt: '2026-08-02T00:00:00',
+    };
+    const newer = {
+      ...RESOLVED_INQUIRY,
+      inquiryId: 6,
+      content: '새 답변',
+      createAt: '2026-07-01T00:00:00',
+      resolvedAt: '2026-09-01T00:00:00',
+    };
+    mockList([older, newer]);
+    render(<MyInquiries />);
+
+    const items = screen.getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('새 답변');
+    expect(items[1]).toHaveTextContent('오래된 답변');
+  });
+
+  it('메타 줄은 유형별로 다르다 — 예약 요약, 방·발생 시각, 취소된 예약', () => {
     mockList([
       OPEN_INQUIRY,
       RESOLVED_INQUIRY,
       {
         ...OPEN_INQUIRY,
         inquiryId: 3,
+        category: 'ETC',
         content: '취소한 예약인데 출석 문제가 있어요.',
+        roomId: null,
+        roomName: null,
         reservationId: null,
         reservationSummary: '2026-08-28 13:00~14:00 306-1',
       },
+      {
+        ...OPEN_INQUIRY,
+        inquiryId: 4,
+        content: '지워진 방의 고장',
+        roomId: null,
+        roomName: '428',
+      },
     ]);
     render(<MyInquiries />);
-    expandResolved();
 
     expect(
       within(resolvedItem()).getByText('예약 2026-08-30 10:00~11:00 201-A'),
     ).toBeInTheDocument();
+    expect(within(openItem()).getByText('306')).toBeInTheDocument();
     expect(
       within(itemOf('취소한 예약인데 출석 문제가 있어요.')).getByText(
         '예약 2026-08-28 13:00~14:00 306-1 · 취소된 예약',
       ),
     ).toBeInTheDocument();
-    expect(within(openItem()).queryByText(/^예약 /)).toBeNull();
+    expect(
+      within(itemOf('지워진 방의 고장')).getByText('428(삭제된 방)'),
+    ).toBeInTheDocument();
   });
 
-  // 처리완료 문의는 본문을 끝까지 읽을 다른 길이 없다. 접수됨은 항상 펼쳐진 그룹이라
-  // 클램프를 유지한다(전문은 수정 화면에서 읽힌다).
-  it('처리완료 카드는 본문 전문을, 접수됨 카드는 2줄 클램프를 쓴다', () => {
+  // 답변 완료 문의는 본문을 끝까지 읽을 다른 길이 없다. 답변 대기는 수정 화면에서 전문이 읽힌다.
+  it('답변 완료 카드는 본문 전문을, 답변 대기 카드는 2줄 클램프를 쓴다', () => {
     const longContent = `첫 줄입니다.\n둘째 줄입니다.\n${'가'.repeat(400)}`;
     mockList([OPEN_INQUIRY, { ...RESOLVED_INQUIRY, content: longContent }]);
     render(<MyInquiries />);
-    expandResolved();
 
     // 기본 문자열 매처는 줄바꿈을 공백으로 정규화하므로 textContent 를 직접 비교한다.
     const resolvedBody = screen.getByText(
@@ -277,7 +351,7 @@ describe('MyInquiries', () => {
   });
 
   // 마이페이지에서 폼으로 바로 가는 항목이 사라졌다. 목록 API 가 죽어도 접수 경로는 살아야 한다.
-  it('불러오지 못해도 문의하기 버튼이 있고, 다시 시도는 refetch 를 부른다', () => {
+  it('목록 없이 실패하면 오류 문구와 다시 시도, 문의하기 버튼이 있다', () => {
     const refetch = jest.fn();
     mockList(undefined, { isError: true, refetch });
     render(<MyInquiries />);
@@ -292,6 +366,19 @@ describe('MyInquiries', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/inquiry/new');
   });
 
+  // react-query v5 는 재조회가 실패해도 data 를 유지한다. 손에 쥔 답변을 오류 문구로 덮지 않는다.
+  it('캐시가 있는 채로 재조회에 실패하면 목록 위에 배너만 얹는다', () => {
+    const refetch = jest.fn();
+    mockList([OPEN_INQUIRY, RESOLVED_INQUIRY], { isError: true, refetch });
+    render(<MyInquiries />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(STALE_MESSAGE);
+    expect(screen.getByText(RESOLVED_INQUIRY.content)).toBeInTheDocument();
+    expect(screen.queryByText('문의 목록을 불러오지 못했습니다.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it('불러오는 중에도 문의하기 버튼이 있다', () => {
     mockList(undefined, { isPending: true });
     render(<MyInquiries />);
@@ -301,64 +388,6 @@ describe('MyInquiries', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '문의하기' }),
-    ).toBeInTheDocument();
-  });
-
-  it('접수됨이 있으면 처리완료는 접혀 있고 토글로 펼쳐진다', () => {
-    render(<MyInquiries />);
-
-    expect(resolvedToggle()).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText(RESOLVED_INQUIRY.content)).toBeNull();
-    expect(screen.getByText(OPEN_INQUIRY.content)).toBeInTheDocument();
-
-    expandResolved();
-    expect(resolvedToggle()).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText(RESOLVED_INQUIRY.content)).toBeInTheDocument();
-
-    expandResolved();
-    expect(screen.queryByText(RESOLVED_INQUIRY.content)).toBeNull();
-  });
-
-  it('접수됨이 없으면 처리완료가 기본으로 펼쳐져 있다', () => {
-    mockList([RESOLVED_INQUIRY]);
-    render(<MyInquiries />);
-
-    expect(resolvedToggle()).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText(RESOLVED_INQUIRY.content)).toBeInTheDocument();
-  });
-
-  it('처리완료가 없으면 토글 행을 그리지 않는다', () => {
-    mockList([OPEN_INQUIRY]);
-    render(<MyInquiries />);
-
-    expect(screen.queryByRole('button', { name: /^처리완료/ })).toBeNull();
-  });
-
-  // 첫 방문은 첫 렌더가 로딩(inquiries undefined)이다. 접힘 여부를 useState 초기값으로
-  // 굳히면 응답이 와서 접수됨이 생겨도 영영 펼쳐진 채다.
-  it('로딩 뒤에 데이터가 와도 접수됨이 있으면 처리완료가 접혀 있다', () => {
-    mockList(undefined, { isPending: true });
-    const { rerender } = render(<MyInquiries />);
-    expect(screen.queryByRole('button', { name: /^처리완료/ })).toBeNull();
-
-    mockList([OPEN_INQUIRY, RESOLVED_INQUIRY]);
-    rerender(<MyInquiries />);
-
-    expect(resolvedToggle()).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText(RESOLVED_INQUIRY.content)).toBeNull();
-  });
-
-  it('토글 라벨은 답변이 달린 처리완료가 있을 때만 답변 건수를 붙인다', () => {
-    const { unmount } = render(<MyInquiries />);
-    expect(
-      screen.getByRole('button', { name: '처리완료 1건 · 관리자 답변 1건' }),
-    ).toBeInTheDocument();
-    unmount();
-
-    mockList([OPEN_INQUIRY, { ...RESOLVED_INQUIRY, adminMemo: null }]);
-    render(<MyInquiries />);
-    expect(
-      screen.getByRole('button', { name: '처리완료 1건' }),
     ).toBeInTheDocument();
   });
 });

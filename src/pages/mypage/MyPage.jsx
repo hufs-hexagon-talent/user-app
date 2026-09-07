@@ -104,18 +104,25 @@ const MyPage = () => {
         </div>
       </div>
 
-      {/* 메뉴 */}
+      {/* 메뉴 — 항목은 <button>. div onClick 은 키보드로 못 간다. */}
       <div id="menu">
-        {/* 내 예약 관리 */}
         <div className="menu-section">
           <div className="menu-title">내 예약 관리</div>
           <div className="menu-items">
-            <div className="menu-item" onClick={() => navigate('/otp')}>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/otp')}>
               내 QR코드
-            </div>
-            <div className="menu-item" onClick={() => navigate('/check')}>
+              <span aria-hidden="true">›</span>
+            </button>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/check')}>
               내 예약 조회
-            </div>
+              <span aria-hidden="true">›</span>
+            </button>
           </div>
         </div>
         {/* 내 계정 관리 */}
@@ -128,15 +135,24 @@ const MyPage = () => {
             이메일 변경
           </div>
         </div> */}
-        {/* 문의 및 건의 — 항목은 "1:1 문의" 하나. 목록(/inquiry)이 허브이고 접수는 거기의
-            "문의하기" 버튼으로 한다. 접수·수정 뒤에 항상 목록으로 돌아오므로 두 항목을
-            나눠 둘 이유가 없었다. */}
+        {/* 문의 — 접수는 폼으로 바로, 답변 확인은 목록으로. 마이페이지에 오는 이유가 그 둘이다. */}
         <div className="menu-section">
-          <div className="menu-title">문의 및 건의</div>
+          <div className="menu-title">문의</div>
           <div className="menu-items">
-            <div className="menu-item" onClick={() => navigate('/inquiry')}>
-              1:1 문의
-            </div>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/inquiry/new')}>
+              문의하기
+              <span aria-hidden="true">›</span>
+            </button>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/inquiry')}>
+              내 문의
+              <span aria-hidden="true">›</span>
+            </button>
           </div>
         </div>
       </div>
