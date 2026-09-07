@@ -26,27 +26,43 @@ beforeEach(() => {
   useLatestReservation.mockReturnValue({ data: [] });
 });
 
-// Notion 폼을 새 창으로 열던 자리를 인앱 화면 이동으로 바꿨다.
-// window.open 이 다시 호출되면 회귀다.
-describe('MyPage 문의 및 건의', () => {
-  it('1:1 문의를 누르면 목록 화면으로 이동하고 창을 새로 열지 않는다', () => {
+describe('MyPage 문의 섹션', () => {
+  it('문의하기를 누르면 접수 화면으로 바로 간다', () => {
+    render(<MyPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '문의하기' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/inquiry/new');
+  });
+
+  // Notion 폼을 새 창으로 열던 자리를 인앱 화면 이동으로 바꿨다. window.open 이 다시 호출되면 회귀다.
+  it('내 문의를 누르면 목록으로 가고 창을 새로 열지 않는다', () => {
     const openSpy = jest.spyOn(window, 'open').mockImplementation(() => {});
     render(<MyPage />);
 
-    fireEvent.click(screen.getByText('1:1 문의'));
+    fireEvent.click(screen.getByRole('button', { name: '내 문의' }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/inquiry');
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
   });
 
-  // 목록(/inquiry)이 허브다. 접수는 목록의 "문의하기" 버튼으로 한다.
-  it('문의하기·내 문의 항목은 더 이상 없다', () => {
+  // 섹션 하나에 항목 하나("문의 및 건의 › 1:1 문의")가 껍데기였다. 섹션 "문의" 아래 두 항목.
+  it('섹션 제목은 문의이고 1:1 문의·문의 및 건의는 없다', () => {
     render(<MyPage />);
 
-    expect(screen.queryByText('문의하기')).toBeNull();
-    expect(screen.queryByText('내 문의')).toBeNull();
-    expect(screen.getByText('문의 및 건의')).toBeInTheDocument();
+    expect(screen.getByText('문의')).toBeInTheDocument();
+    expect(screen.queryByText(/1:1/)).toBeNull();
+    expect(screen.queryByText('문의 및 건의')).toBeNull();
+  });
+
+  it('내 예약 관리 항목도 버튼이고 각 화면으로 간다', () => {
+    render(<MyPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '내 QR코드' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/otp');
+    fireEvent.click(screen.getByRole('button', { name: '내 예약 조회' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/check');
   });
 
   it('정정 요청·의견 보내기 같은 Notion 항목은 더 이상 없다', () => {
