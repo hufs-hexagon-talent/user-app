@@ -53,9 +53,6 @@ const NavigationBar = ({ locked = false }) => {
             <Navbar.Link as={Link} to="/qrcheck">
               출석 체크
             </Navbar.Link>
-            <Navbar.Link as={Link} to="/notice">
-              이용 규칙
-            </Navbar.Link>
             <Navbar.Link
               as="button"
               disabled={loggingOut}
@@ -92,9 +89,6 @@ const NavigationBar = ({ locked = false }) => {
                 마이페이지
               </Navbar.Link>
             )}
-            <Navbar.Link as={Link} to="/notice">
-              이용 규칙
-            </Navbar.Link>
             {loggedIn ? (
               <Navbar.Link
                 as="button"

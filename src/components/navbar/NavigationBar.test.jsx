@@ -55,3 +55,18 @@ describe('NavigationBar 고정', () => {
     expect(nav).toHaveClass('bg-white');
   });
 });
+
+// 이용 규칙은 마이페이지 안으로 내려갔다. 마이페이지가 없는 사람들(비로그인·관리실 계정·
+// 비밀번호 변경 강제 상태)은 푸터에서 들어간다.
+describe('NavigationBar 이용 규칙 링크 제거', () => {
+  // 문구가 아니라 href 로 본다. 문구만 바꾼 링크가 되살아나도 잡아야 한다.
+  test('상단에 /notice 로 가는 링크가 없다', () => {
+    const { container } = renderAs('USER');
+    expect(container.querySelector('a[href="/notice"]')).toBeNull();
+  });
+
+  test('관리실 계정 메뉴에도 /notice 로 가는 링크가 없다', () => {
+    const { container } = renderAs('RESIDENT');
+    expect(container.querySelector('a[href="/notice"]')).toBeNull();
+  });
+});

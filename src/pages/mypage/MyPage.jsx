@@ -139,6 +139,17 @@ const MyPage = () => {
             </div>
           </div>
         </div>
+        {/* 이용 안내 — 상단 네비게이션에 있던 "이용 규칙" 탭을 여기로 내렸다. 로그인한
+            학생이 규칙을 다시 볼 일은 예약·문의를 확인하러 마이페이지에 들어왔을 때라,
+            매 화면 상단에 자리를 차지하는 것보다 이 메뉴에 두는 편이 찾기 쉽다. */}
+        <div className="menu-section">
+          <div className="menu-title">이용 안내</div>
+          <div className="menu-items">
+            <div className="menu-item" onClick={() => navigate('/notice')}>
+              이용 규칙
+            </div>
+          </div>
+        </div>
       </div>
 
       <Modal
