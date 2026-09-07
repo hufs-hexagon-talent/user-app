@@ -139,6 +139,20 @@ describe('MyInquiries', () => {
     expect(screen.queryByText(/관리자 답변/)).toBeNull();
   });
 
+  // jsdom 은 CSS 를 적용하지 않아 클램프가 죽어도 위 테스트는 통과한다. tailwind 는
+  // .line-clamp-2{display:-webkit-box} 를 .block{display:block} 보다 먼저 내보내고 명시도가
+  // 같아서, 둘을 같이 주면 block 이 이겨 클램프가 통째로 무효가 된다(실측: 200px vs 40px).
+  // 클래스 조합 자체를 금지해서 잠근다.
+  it('본문에 line-clamp-2 와 block 을 함께 주지 않는다', () => {
+    render(<MyInquiries />);
+
+    [OPEN_INQUIRY, RESOLVED_INQUIRY].forEach(inquiry => {
+      const body = screen.getByText(inquiry.content);
+      expect(body).toHaveClass('line-clamp-2');
+      expect(body).not.toHaveClass('block');
+    });
+  });
+
   // 긴 본문이 행을 오른쪽으로 늘리면 클램프가 잘릴 자리를 못 찾는다(admin Shell 과 같은 함정).
   it('본문을 감싼 칸은 min-width 를 0 으로 내린다', () => {
     render(<MyInquiries />);
@@ -159,6 +173,27 @@ describe('MyInquiries', () => {
     expect(within(openItem()).getByText('이전 답변')).toBeInTheDocument();
     expect(within(resolvedItem()).queryByText('이전 답변')).toBeNull();
     expect(screen.queryByText('자리를 다시 확인해 주세요.')).toBeNull();
+  });
+
+  // 행 버튼의 aria-label 이 안쪽 텍스트를 통째로 덮는다. 칩을 거기 안 실으면 스크린리더는
+  // 답변이 와 있다는 사실만 못 받는다 — 이 표시가 필요한 유일한 경우인데도.
+  it('재오픈된 행은 접근 이름에도 이전 답변을 싣는다', () => {
+    mockList([
+      { ...OPEN_INQUIRY, adminMemo: '자리를 다시 확인해 주세요.' },
+      RESOLVED_INQUIRY,
+    ]);
+    render(<MyInquiries />);
+
+    expect(
+      screen.getByRole('button', {
+        name: '시설·키오스크 고장 답변 대기 이전 답변 2026-09-01 10:00 문의 보기',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: '출석·예약 이의 답변 완료 2026-08-30 09:00 문의 보기',
+      }),
+    ).toBeInTheDocument();
   });
 
   it('수정·삭제는 목록에 두지 않는다', () => {
