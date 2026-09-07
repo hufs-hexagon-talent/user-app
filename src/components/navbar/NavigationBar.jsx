@@ -17,6 +17,20 @@ const ACTIVE_LINK_CLASS = [
   'md:underline md:decoration-2 md:underline-offset-8',
 ].join(' ');
 
+// 마이페이지 메뉴에서 들어가는 화면들. 상단에 자기 탭이 없어서, 여기 있는 동안에는
+// 네 탭이 모두 회색이라 어느 갈래에 있는지 알 수 없었다. 마이페이지 탭을 켜 둔다.
+// 문의는 접수·수정 화면이 하위 경로로 더 있어 그 아래까지 포함한다.
+// 내 QR코드(/otp)는 마이페이지 메뉴에도 있지만 상단에 자기 탭이 있으므로 넣지 않는다.
+// 이용 규칙(/notice)은 푸터로도 들어오지만, 그 경로로 오는 비로그인·관리실 계정은
+// 마이페이지 탭 자체가 비활성이라 영향이 없다.
+const MYPAGE_SECTION = [
+  '/check',
+  '/inquiry',
+  '/notice',
+  '/password',
+  '/emailSend',
+];
+
 // 메뉴 이동은 라우터로 한다. href(전체 페이지 로드)는 화면 상태를 초기화하고
 // 로그아웃 요청을 페이지 이탈로 중단시키는 원인이었다.
 // locked: 기본 비밀번호를 바꾸기 전이라 다른 화면으로 갈 수 없는 상태.
@@ -30,9 +44,17 @@ const NavigationBar = ({ locked = false }) => {
 
   // 정확히 일치할 때만 활성으로 본다. 세미나실 예약의 경로가 "/" 라
   // startsWith 로 비교하면 어느 화면에 있든 항상 활성이 된다.
-  // 나머지 탭(/otp·/mypage·/qrcheck)은 라우터에 하위 경로가 없어 정확 일치로 충분하다.
+  // 마이페이지만 예외다(MYPAGE_SECTION 주석 참고).
+  const isActive = to =>
+    to === '/mypage'
+      ? pathname === '/mypage' ||
+        MYPAGE_SECTION.some(
+          section => pathname === section || pathname.startsWith(`${section}/`),
+        )
+      : pathname === to;
+
   const linkProps = to =>
-    pathname === to
+    isActive(to)
       ? { className: ACTIVE_LINK_CLASS, 'aria-current': 'page' }
       : {};
 
