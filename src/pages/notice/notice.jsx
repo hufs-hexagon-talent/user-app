@@ -4,6 +4,7 @@ import {
   MdErrorOutline,
   MdCheckCircleOutline,
   MdOutlineAccountCircle,
+  MdOutlineAddToHomeScreen,
 } from 'react-icons/md';
 
 import {
@@ -12,6 +13,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '../../components/accordion/Accordion';
+import HomeScreenGuide from './HomeScreenGuide';
 
 const Notice = () => {
   const navigate = useNavigate();
@@ -114,6 +116,24 @@ const Notice = () => {
                   </button>
                   (로그인 후), 또는 이메일 ces@hufs.ac.kr
                 </p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* 홈 화면 바로가기 — 학생 대부분이 휴대폰으로 들어오는데, 매번 주소를
+              치거나 검색해서 찾아오느라 로그인 전 단계에서 이탈한다. 안내가 길어
+              내용은 HomeScreenGuide 로 분리했다. */}
+          <AccordionItem value="homescreen" className="border-b">
+            <AccordionTrigger className="px-0 hover:no-underline">
+              <div className="flex items-center gap-2 text-lg font-semibold">
+                <MdOutlineAddToHomeScreen className="text-blue-500 w-5 h-5" />
+                <span>홈 화면에 바로가기 추가하기</span>
+              </div>
+            </AccordionTrigger>
+
+            <AccordionContent className="px-0">
+              <div className="py-4 px-2">
+                <HomeScreenGuide />
               </div>
             </AccordionContent>
           </AccordionItem>
