@@ -1,7 +1,11 @@
 import {
   CANCELED_RESERVATION_SUFFIX,
+  formatDateHeading,
   formatReservationTime,
+  formatReservationTimeRange,
   formatRoom,
+  groupByDate,
+  isDisputable,
   linkedReservationLabel,
   reservationStateLabel,
   sortReservationsLatestFirst,
@@ -36,8 +40,7 @@ describe('reservationStateLabel', () => {
   });
 
   // 서버의 노쇼 판정은 종료 시각 경과다. 진행 중(종료 전)인 예약은 아직 체크인할 수 있다.
-  it('NOT_VISITED 는 종료 시각이 지났을 때만 미출석, 아니면 예약 예정', () => {
-    expect(reservationStateLabel(reservation(), now)).toBe('예약 예정');
+  it('NOT_VISITED 는 종료 시각이 지났을 때만 미출석, 시작 전이면 예약 예정', () => {
     expect(
       reservationStateLabel(
         reservation({
@@ -56,6 +59,79 @@ describe('reservationStateLabel', () => {
         now,
       ),
     ).toBe('예약 예정');
+  });
+});
+
+describe('reservationStateLabel 이용 중', () => {
+  // 시작은 지났고 종료는 안 지난 NOT_VISITED. "예약 예정" 도 "미출석" 도 아니다.
+  it('NOT_VISITED 가 진행 중이면 이용 중', () => {
+    const now = new Date('2026-09-05T10:30:00');
+    expect(reservationStateLabel(reservation(), now)).toBe('이용 중');
+    expect(
+      reservationStateLabel(reservation(), new Date('2026-09-05T09:00:00')),
+    ).toBe('예약 예정');
+  });
+});
+
+describe('isDisputable', () => {
+  const now = new Date('2026-09-05T10:30:00');
+
+  // 출석 이의 대상: 종료가 지난 미출석, 그리고 제한이 풀리며 처리된 예약.
+  it('종료가 지난 NOT_VISITED 와 PROCESSED 만 참', () => {
+    expect(isDisputable(reservation(), now)).toBe(false);
+    expect(
+      isDisputable(
+        reservation({
+          reservationStartTime: '2026-09-04T10:00:00',
+          reservationEndTime: '2026-09-04T11:00:00',
+        }),
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isDisputable(reservation({ reservationState: 'PROCESSED' }), now),
+    ).toBe(true);
+    expect(
+      isDisputable(
+        reservation({
+          reservationState: 'VISITED',
+          reservationStartTime: '2026-09-04T10:00:00',
+          reservationEndTime: '2026-09-04T11:00:00',
+        }),
+        now,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('formatReservationTimeRange / formatDateHeading / groupByDate', () => {
+  it('카드의 시각은 날짜 없이, 그룹 제목은 연도와 요일과 함께', () => {
+    expect(formatReservationTimeRange(reservation())).toBe('10:00~11:00');
+    expect(formatDateHeading('2026-09-05T10:00:00')).toBe('2026-09-05 (토)');
+  });
+
+  it('같은 날짜끼리 묶고 입력 순서를 지킨다', () => {
+    const groups = groupByDate([
+      reservation({
+        reservationId: 3,
+        reservationStartTime: '2026-09-06T14:00:00',
+      }),
+      reservation({
+        reservationId: 2,
+        reservationStartTime: '2026-09-05T15:00:00',
+      }),
+      reservation({
+        reservationId: 1,
+        reservationStartTime: '2026-09-05T10:00:00',
+      }),
+    ]);
+
+    expect(groups.map(g => g.heading)).toEqual([
+      '2026-09-06 (일)',
+      '2026-09-05 (토)',
+    ]);
+    expect(groups[1].items.map(r => r.reservationId)).toEqual([2, 1]);
+    expect(groupByDate([])).toEqual([]);
   });
 });
 
