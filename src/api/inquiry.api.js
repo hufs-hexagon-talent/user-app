@@ -22,11 +22,20 @@ const invalidateMyInquiries = () =>
 // 문의 접수
 export const useCreateInquiry = () =>
   useMutation({
-    mutationFn: async ({ category, content, reservationId }) => {
+    mutationFn: async ({
+      category,
+      content,
+      reservationId,
+      roomId,
+      occurredAt,
+    }) => {
       const response = await apiClient.post('/inquiries', {
         category,
         content,
         reservationId,
+        // 시설 문의만 값이 있다. 수정에서 roomId·occurredAt 는 교체(null = 지움), reservationId 는 유지다.
+        roomId,
+        occurredAt,
       });
       return response.data;
     },
@@ -36,11 +45,20 @@ export const useCreateInquiry = () =>
 // 문의 수정 (OPEN 상태에서만 가능 — 서버가 INQUIRY-003 으로 막는다)
 export const useUpdateInquiry = () =>
   useMutation({
-    mutationFn: async ({ inquiryId, category, content, reservationId }) => {
+    mutationFn: async ({
+      inquiryId,
+      category,
+      content,
+      reservationId,
+      roomId,
+      occurredAt,
+    }) => {
       const response = await apiClient.patch(`/inquiries/me/${inquiryId}`, {
         category,
         content,
         reservationId,
+        roomId,
+        occurredAt,
       });
       return response.data;
     },
