@@ -103,11 +103,14 @@ const Check = () => {
     setCurrentPage(value);
   };
 
-  const inquiredReservationIds = new Set(
-    (Array.isArray(inquiries) ? inquiries : [])
-      .map(inquiry => inquiry.reservationId)
-      .filter(reservationId => reservationId != null),
-  );
+  // 예약 → 그 예약의 문의 번호. 상세로 곧장 보내려면 id 가 필요하다. 한 예약에 문의가 여럿이면
+  // 목록 순서(접수일 내림차순)의 첫 건, 즉 가장 최근 건을 남긴다.
+  const inquiryIdByReservationId = new Map();
+  (Array.isArray(inquiries) ? inquiries : []).forEach(inquiry => {
+    if (inquiry.reservationId == null) return;
+    if (inquiryIdByReservationId.has(inquiry.reservationId)) return;
+    inquiryIdByReservationId.set(inquiry.reservationId, inquiry.inquiryId);
+  });
 
   // 서버는 생성 역순으로 준다 — 내일 예약을 먼저 잡고 오늘 예약을 나중에 잡으면 표에서 뒤집힌다.
   const sortedReservations = sortReservationsLatestFirst(reservations);
@@ -133,10 +136,11 @@ const Check = () => {
   // 문제를 보고 있는 화면에서 바로 이의를 시작하게 한다 — 폼이 예약을 확정한 채로 열린다.
   const actionLinkClass =
     'inline-flex min-h-[44px] items-center px-2 font-medium text-[#002D56] hover:underline';
-  const renderInquiryLink = reservation =>
-    inquiredReservationIds.has(reservation.reservationId) ? (
+  const renderInquiryLink = reservation => {
+    const inquiryId = inquiryIdByReservationId.get(reservation.reservationId);
+    return inquiryId != null ? (
       <Link
-        to="/inquiry"
+        to={`/inquiry/${inquiryId}`}
         aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 문의 보기`}
         className={actionLinkClass}>
         문의 보기
@@ -149,6 +153,7 @@ const Check = () => {
         문의
       </Link>
     );
+  };
 
   return (
     <div>

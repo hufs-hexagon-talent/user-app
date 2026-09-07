@@ -2,6 +2,8 @@ import { format } from 'date-fns';
 
 import {
   DELETED_ROOM_SUFFIX,
+  answerTitle,
+  hasAnswer,
   metaLabel,
   sortResolvedLatestFirst,
 } from './inquiryView';
@@ -87,5 +89,44 @@ describe('sortResolvedLatestFirst', () => {
     const copy = [...list];
     sortResolvedLatestFirst(list);
     expect(list).toEqual(copy);
+  });
+});
+
+describe('hasAnswer', () => {
+  it('adminMemo 가 있으면 상태와 무관하게 답변으로 본다', () => {
+    expect(hasAnswer({ status: 'RESOLVED', adminMemo: '처리했습니다.' })).toBe(
+      true,
+    );
+    // 재오픈은 status 가 OPEN 으로 돌아오지만 답변은 남는다.
+    expect(
+      hasAnswer({ status: 'OPEN', adminMemo: '다시 확인해 주세요.' }),
+    ).toBe(true);
+  });
+
+  it('adminMemo 가 없거나 빈 문자열이면 답변이 아니다', () => {
+    expect(hasAnswer({ status: 'RESOLVED', adminMemo: null })).toBe(false);
+    expect(hasAnswer({ status: 'OPEN', adminMemo: '' })).toBe(false);
+    expect(hasAnswer(null)).toBe(false);
+  });
+});
+
+describe('answerTitle', () => {
+  it('답변 완료는 답변 시각을 붙인다', () => {
+    expect(
+      answerTitle({ status: 'RESOLVED', resolvedAt: '2026-08-30T11:40:00' }),
+    ).toBe('관리자 답변 · 2026-08-30 11:40');
+  });
+
+  it('답변 완료인데 답변 시각이 없으면 시각 없이 쓴다', () => {
+    expect(answerTitle({ status: 'RESOLVED', resolvedAt: null })).toBe(
+      '관리자 답변',
+    );
+  });
+
+  // 재오픈 답변의 시각을 담는 필드가 없다. updateAt 은 마지막 수정 시각일 뿐이라 쓰지 않는다.
+  it('재오픈(OPEN)은 시각 없는 이전 답변이다', () => {
+    expect(
+      answerTitle({ status: 'OPEN', resolvedAt: '2026-08-30T11:40:00' }),
+    ).toBe('이전 답변');
   });
 });

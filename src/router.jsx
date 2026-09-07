@@ -26,6 +26,7 @@ import MyPage from './pages/mypage/MyPage';
 import EmailSend from './pages/email/EmailSend';
 import MyInquiries from './pages/inquiry/MyInquiries';
 import InquiryForm from './pages/inquiry/InquiryForm';
+import InquiryDetail from './pages/inquiry/InquiryDetail';
 
 import AdminPage from './pages/admin/AdminPage';
 import SignUp from './pages/admin/user/SignUp';
@@ -51,6 +52,8 @@ const inquiryRoutes = (
   <>
     <Route path="/inquiry" element={<MyInquiries />} />
     <Route path="/inquiry/new" element={<InquiryForm />} />
+    {/* 정적 세그먼트가 먼저 매칭되므로 /inquiry/new 가 :id 에 먹히지 않는다(선언 순서 무관). */}
+    <Route path="/inquiry/:id" element={<InquiryDetail />} />
     <Route path="/inquiry/:id/edit" element={<InquiryForm />} />
   </>
 );
