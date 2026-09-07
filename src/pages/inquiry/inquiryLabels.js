@@ -6,7 +6,8 @@ export const CATEGORY_LABELS = {
   ETC: '기타',
 };
 
+// 학생이 기다리는 것은 "처리" 가 아니라 "답변" 이다. 상태 이름이 그 말을 한다.
 export const STATUS_LABELS = {
-  OPEN: '접수됨',
-  RESOLVED: '처리완료',
+  OPEN: '답변 대기',
+  RESOLVED: '답변 완료',
 };

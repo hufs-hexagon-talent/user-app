@@ -3,23 +3,32 @@ import { HiOutlineExclamationCircle } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Button, Modal } from 'flowbite-react';
-import { ChevronDown } from 'lucide-react';
 
 import { useDeleteInquiry, useMyInquiries } from '../../api/inquiry.api';
 import { useCustomSnackbars } from '../../components/snackbar/SnackBar';
 
 import { inquiryErrorMessage } from './inquiryErrorMessage';
 import { CATEGORY_LABELS, STATUS_LABELS } from './inquiryLabels';
-import { linkedReservationLabel } from './reservationView';
+import { metaLabel, sortResolvedLatestFirst } from './inquiryView';
 
-// 학생이 관리자 답변을 확인할 통로는 이 목록뿐이다(완료 알림 없음). 접힌 줄에 답변 신호를 남긴다.
-export const resolvedToggleLabel = (resolvedCount, answeredCount) =>
-  answeredCount > 0
-    ? `처리완료 ${resolvedCount}건 · 관리자 답변 ${answeredCount}건`
-    : `처리완료 ${resolvedCount}건`;
+export const STALE_MESSAGE = '최신 상태를 못 받아왔습니다.';
 
 const newInquiryButtonClass =
   'rounded-md bg-[#002D56] px-4 py-2 text-white text-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
+const retryLinkClass =
+  'inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline';
+
+const formatAt = value => format(new Date(value), 'yyyy-MM-dd HH:mm');
+
+// 관리자 글은 제목이 있는 박스로. "메모" 는 관리자 DB 용어라 학생 화면에서 쓰지 않는다.
+const AnswerBox = ({ title, text }) => (
+  <div className="mt-2 rounded-md bg-gray-50 p-3">
+    <p className="text-xs font-semibold text-gray-600">{title}</p>
+    <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap break-words">
+      {text}
+    </p>
+  </div>
+);
 
 const MyInquiries = () => {
   const navigate = useNavigate();
@@ -31,9 +40,6 @@ const MyInquiries = () => {
   // 실제 차단은 동기 래치가 한다(CheckRoom.jsx 관례).
   const deletingRef = useRef(false);
   const [openModal, setOpenModal] = useState(false);
-  // 처리완료 그룹의 접힘은 "사용자 오버라이드 + 파생값" 이다. 첫 렌더는 로딩이라 목록이
-  // 비어 있으므로, useState 초기값으로 굳히면 응답이 온 뒤에도 영영 펼쳐진 채가 된다.
-  const [resolvedOverride, setResolvedOverride] = useState(null);
 
   const handleDelete = async inquiryId => {
     if (deletingRef.current) return;
@@ -50,17 +56,29 @@ const MyInquiries = () => {
     setOpenModal(false);
   };
 
-  const isLoaded = !isPending && !isError;
-  const list = Array.isArray(inquiries) ? inquiries : [];
-  // 서버가 접수일 내림차순으로 준다. 여기서는 나누기만 하고 정렬하지 않는다.
+  // 분기 순서: 목록이 손에 있으면 isError 여도 목록을 그린다 — react-query v5 는 재조회가
+  // 실패해도 data 를 유지하므로, 오류를 먼저 보면 이미 받은 답변을 화면에서 지우게 된다.
+  const hasList = !isPending && Array.isArray(inquiries);
+  const list = hasList ? inquiries : [];
+  // 서버가 접수일 내림차순으로 준다. 답변 대기는 그대로, 답변 완료는 답변한 순서로.
   const open = list.filter(inquiry => inquiry.status !== 'RESOLVED');
-  const resolved = list.filter(inquiry => inquiry.status === 'RESOLVED');
-  const answered = resolved.filter(inquiry => inquiry.adminMemo);
-  const isResolvedExpanded = resolvedOverride ?? open.length === 0;
+  const resolved = sortResolvedLatestFirst(
+    list.filter(inquiry => inquiry.status === 'RESOLVED'),
+  );
 
   const renderCard = inquiry => {
-    const linked = linkedReservationLabel(inquiry);
     const isResolved = inquiry.status === 'RESOLVED';
+    const meta = metaLabel(inquiry);
+    // 재오픈된 문의(OPEN + adminMemo)도 답변을 숨기지 않는다. 답변 시각을 담는 필드가 없어
+    // 재오픈 답변에는 시각을 붙이지 않는다(updateAt 은 마지막 수정 시각일 뿐이다).
+    let answerTitle = '이전 답변';
+    if (isResolved) {
+      answerTitle = inquiry.resolvedAt
+        ? `관리자 답변 · ${formatAt(inquiry.resolvedAt)}`
+        : '관리자 답변';
+    }
+    const hasAnswer = Boolean(inquiry.adminMemo);
+
     return (
       <li key={inquiry.inquiryId} className="border rounded-md p-4 break-keep">
         <div className="flex items-center justify-between mb-2">
@@ -78,30 +96,31 @@ const MyInquiries = () => {
             </span>
           </div>
           <span className="text-xs text-gray-500 whitespace-nowrap">
-            {format(new Date(inquiry.createAt), 'yyyy-MM-dd HH:mm')}
+            {formatAt(inquiry.createAt)}
           </span>
         </div>
 
-        {linked && <p className="mb-2 text-xs text-gray-500">예약 {linked}</p>}
+        {hasAnswer && (
+          <AnswerBox title={answerTitle} text={inquiry.adminMemo} />
+        )}
 
-        {/* 처리완료 문의는 본문을 끝까지 읽을 다른 길이 없어 전문을 보여준다. 접수됨은
-            항상 펼쳐진 그룹이라 클램프를 유지한다(전문은 수정 화면에서 읽힌다). */}
+        {meta && <p className="mt-2 text-xs text-gray-500">{meta}</p>}
+
+        {hasAnswer && (
+          <p className="mt-2 text-xs font-semibold text-gray-600">내 문의</p>
+        )}
+        {/* 답변 완료 문의는 본문을 끝까지 읽을 다른 길이 없어 전문을 보여준다. 답변 대기는
+            수정 화면에서 전문이 읽히므로 클램프를 유지한다. */}
         <p
           className={
             isResolved
-              ? 'text-sm text-gray-800 whitespace-pre-wrap break-words'
-              : 'text-sm text-gray-800 line-clamp-2'
+              ? 'mt-1 text-sm text-gray-800 whitespace-pre-wrap break-words'
+              : 'mt-1 text-sm text-gray-800 line-clamp-2'
           }>
           {inquiry.content}
         </p>
 
-        {isResolved && inquiry.adminMemo && (
-          <p className="mt-2 text-sm text-gray-600 bg-gray-50 rounded p-2">
-            처리 메모: {inquiry.adminMemo}
-          </p>
-        )}
-
-        {inquiry.status === 'OPEN' && (
+        {!isResolved && (
           <div className="mt-3 flex justify-end gap-3 text-sm">
             <button
               type="button"
@@ -123,11 +142,10 @@ const MyInquiries = () => {
 
   return (
     <div className="px-4 sm:px-8 py-8 max-w-2xl mx-auto">
-      {/* 문의하기 버튼은 로딩·실패·빈 목록에서도 항상 그린다. 마이페이지에서 폼으로 바로 가는
-          항목이 없어졌으므로 목록 API 가 죽어도 접수 경로가 살아 있어야 한다(폼은 이 API 에
-          의존하지 않는다). */}
+      {/* 문의하기 버튼은 로딩·실패·빈 목록에서도 항상 그린다. 목록 API 가 죽어도 접수 경로가
+          살아 있어야 한다(폼은 이 API 에 의존하지 않는다). */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="font-bold text-2xl text-black">1:1 문의</h1>
+        <h1 className="font-bold text-2xl text-black">내 문의</h1>
         <button
           type="button"
           onClick={() => navigate('/inquiry/new')}
@@ -142,7 +160,7 @@ const MyInquiries = () => {
         </div>
       )}
 
-      {!isPending && isError && (
+      {!isPending && !hasList && isError && (
         <div className="text-center text-gray-500 py-16">
           문의 목록을 불러오지 못했습니다.
           <div className="mt-4 flex justify-center">
@@ -153,37 +171,49 @@ const MyInquiries = () => {
         </div>
       )}
 
-      {isLoaded && list.length === 0 && (
+      {hasList && isError && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-4 flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
+          <span>{STALE_MESSAGE}</span>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className={retryLinkClass}>
+            다시 시도
+          </button>
+        </div>
+      )}
+
+      {hasList && list.length === 0 && (
         <div className="text-center text-gray-500 py-16">
           접수한 문의가 없습니다.
         </div>
       )}
 
-      {isLoaded && open.length > 0 && (
-        <ul className="space-y-4">{open.map(renderCard)}</ul>
+      {/* 두 섹션 모두 제목을 갖고 접지 않는다. 1인 문의는 한 자릿수라 접을 이유가 없고,
+          접힌 채로 열리면 새 답변을 놓친다. */}
+      {open.length > 0 && (
+        <section aria-labelledby="open-inquiries-heading" className="mb-8">
+          <h2
+            id="open-inquiries-heading"
+            className="mb-3 text-lg font-bold text-black">
+            답변 대기 {open.length}건
+          </h2>
+          <ul className="space-y-4">{open.map(renderCard)}</ul>
+        </section>
       )}
 
-      {isLoaded && resolved.length > 0 && (
-        <>
-          <button
-            type="button"
-            aria-expanded={isResolvedExpanded}
-            onClick={() => setResolvedOverride(!isResolvedExpanded)}
-            className={`flex w-full items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 ${
-              open.length > 0 ? 'mt-6' : 'mt-0'
-            }`}>
-            <span>{resolvedToggleLabel(resolved.length, answered.length)}</span>
-            <ChevronDown
-              aria-hidden="true"
-              className={`h-4 w-4 transition ${
-                isResolvedExpanded ? 'rotate-180' : 'rotate-0'
-              }`}
-            />
-          </button>
-          {isResolvedExpanded && (
-            <ul className="mt-4 space-y-4">{resolved.map(renderCard)}</ul>
-          )}
-        </>
+      {resolved.length > 0 && (
+        <section aria-labelledby="resolved-inquiries-heading">
+          <h2
+            id="resolved-inquiries-heading"
+            className="mb-3 text-lg font-bold text-black">
+            답변 완료 {resolved.length}건
+          </h2>
+          <ul className="space-y-4">{resolved.map(renderCard)}</ul>
+        </section>
       )}
 
       <div className="flex justify-center items-center">
