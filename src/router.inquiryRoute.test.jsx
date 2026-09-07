@@ -23,6 +23,9 @@ jest.mock('./pages/inquiry/MyInquiries', () => () => (
 jest.mock('./pages/inquiry/InquiryForm', () => () => (
   <div>INQUIRYFORM_MOUNTED</div>
 ));
+jest.mock('./pages/inquiry/InquiryDetail', () => () => (
+  <div>INQUIRYDETAIL_MOUNTED</div>
+));
 jest.mock('./pages/rooms/room/RoomPage', () => () => <div>예약 현황 화면</div>);
 jest.mock('./components/navbar/NavigationBar', () => () => null);
 jest.mock('./components/footer/Footer', () => () => null);
@@ -36,9 +39,7 @@ const renderAt = (path, { isAuthenticated = true } = {}) => {
   });
   return render(
     <RecoilRoot
-      initializeState={snap =>
-        snap.set(authState, { isAuthenticated })
-      }>
+      initializeState={snap => snap.set(authState, { isAuthenticated })}>
       <QueryClientProvider client={queryClient}>
         <RouterComponent />
       </QueryClientProvider>
@@ -101,5 +102,32 @@ describe('/inquiry 라우트', () => {
       expect(screen.getByText('예약 현황 화면')).toBeInTheDocument(),
     );
     expect(screen.queryByText('MYINQUIRIES_MOUNTED')).toBeNull();
+  });
+
+  // /inquiry/new 가 :id 에 먹히면 접수 화면 대신 "new" 라는 문의를 찾다가 목록으로 튕긴다.
+  // 선언 순서를 뒤집어 봐도 v6 는 정적 세그먼트를 먼저 고른다(실측). 이 테스트가 잠그는 것은
+  // 순서가 아니라 두 주소가 각각 제 화면에 닿는다는 사실이다.
+  test('상세는 /inquiry/:id, 접수는 /inquiry/new 로 갈린다', async () => {
+    global.__me = me('USER');
+    const { unmount } = renderAt('/inquiry/12');
+    await waitFor(() =>
+      expect(screen.getByText('INQUIRYDETAIL_MOUNTED')).toBeInTheDocument(),
+    );
+    unmount();
+
+    renderAt('/inquiry/new');
+    await waitFor(() =>
+      expect(screen.getByText('INQUIRYFORM_MOUNTED')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('INQUIRYDETAIL_MOUNTED')).toBeNull();
+  });
+
+  test('관리실(RESIDENT) 계정은 상세에도 도달하지 못한다', async () => {
+    global.__me = me('RESIDENT');
+    renderAt('/inquiry/12');
+    await waitFor(() =>
+      expect(screen.getByText('예약 현황 화면')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('INQUIRYDETAIL_MOUNTED')).toBeNull();
   });
 });
