@@ -14,6 +14,11 @@ export const useMyInquiries = () =>
     queryFn: fetchMyInquiries,
   });
 
+// 성공이든 실패든 목록을 다시 읽어야 화면이 실제 상태를 따라간다. 프로미스를 반환해야
+// mutateAsync 가 재조회까지 기다린다 — 그래야 접수 직후 목록 화면이 stale 캐시를 먼저 그리지 않는다.
+const invalidateMyInquiries = () =>
+  queryClient.invalidateQueries({ queryKey: ['inquiries', 'me'] });
+
 // 문의 접수
 export const useCreateInquiry = () =>
   useMutation({
@@ -25,10 +30,7 @@ export const useCreateInquiry = () =>
       });
       return response.data;
     },
-    // 성공이든 실패든 목록을 다시 읽어야 화면이 실제 상태를 따라간다.
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inquiries', 'me'] });
-    },
+    onSettled: invalidateMyInquiries,
   });
 
 // 문의 수정 (OPEN 상태에서만 가능 — 서버가 INQUIRY-003 으로 막는다)
@@ -42,9 +44,7 @@ export const useUpdateInquiry = () =>
       });
       return response.data;
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inquiries', 'me'] });
-    },
+    onSettled: invalidateMyInquiries,
   });
 
 // 문의 삭제
@@ -54,7 +54,5 @@ export const useDeleteInquiry = () =>
       const response = await apiClient.delete(`/inquiries/me/${inquiryId}`);
       return response.data;
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inquiries', 'me'] });
-    },
+    onSettled: invalidateMyInquiries,
   });
