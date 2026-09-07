@@ -130,3 +130,66 @@ describe('NavigationBar 현재 탭 표시', () => {
     expect(active).toHaveClass('md:underline');
   });
 });
+
+// 마이페이지 메뉴에서 들어가는 화면들은 상단에 자기 탭이 없다. 그 안에 있는 동안
+// 네 탭이 모두 회색이면 처음 고치려던 "내가 어디 있지"가 그대로 남는다.
+describe('NavigationBar 마이페이지 갈래 표시', () => {
+  it.each([
+    ['내 예약 조회', '/check'],
+    ['1:1 문의 목록', '/inquiry'],
+    ['이용 규칙', '/notice'],
+    ['비밀번호 변경', '/password'],
+    ['이메일 변경', '/emailSend'],
+  ])('%s 화면에서 마이페이지 탭이 켜진다', (_label, path) => {
+    renderAt('USER', path);
+
+    expect(screen.getByRole('link', { name: '마이페이지' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  // 문의는 접수·수정이 하위 경로로 더 있다. 목록에서만 켜지면 폼에 들어가는 순간 꺼진다.
+  it.each([['접수', '/inquiry/new'], ['수정', '/inquiry/12/edit']])(
+    '문의 %s 화면에서도 켜진 채로 남는다',
+    (_label, path) => {
+      renderAt('USER', path);
+
+      expect(screen.getByRole('link', { name: '마이페이지' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    },
+  );
+
+  // 내 QR코드는 마이페이지 메뉴에도 있지만 상단에 자기 탭이 있다.
+  // 두 탭이 동시에 켜지면 어느 쪽이 현재 위치인지 알 수 없다.
+  test('내 QR코드 화면에서는 마이페이지가 아니라 자기 탭만 켜진다', () => {
+    renderAt('USER', '/otp');
+
+    expect(screen.getByRole('link', { name: '내 QR코드' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { name: '마이페이지' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  // 접두사만 같은 남의 경로까지 삼키면 안 된다. 지금은 없지만 라우트가 늘면 생긴다.
+  test('경로 접두사만 같은 화면은 마이페이지로 치지 않는다', () => {
+    renderAt('USER', '/checkin');
+
+    expect(screen.getByRole('link', { name: '마이페이지' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  test('첫 화면에서는 마이페이지가 꺼져 있다', () => {
+    renderAt('USER', '/');
+
+    expect(screen.getByRole('link', { name: '마이페이지' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+});
