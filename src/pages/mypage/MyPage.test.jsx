@@ -72,3 +72,21 @@ describe('MyPage 문의 섹션', () => {
     expect(screen.queryByText('의견 보내기')).toBeNull();
   });
 });
+
+// 상단 네비게이션의 "이용 규칙" 탭을 이 메뉴로 내렸다. 로그인한 학생에게는
+// 여기가 주 경로다(푸터 링크는 마이페이지가 없는 계정을 위한 보조 경로다).
+describe('MyPage 이용 안내', () => {
+  it('이용 규칙을 누르면 규칙 화면으로 이동한다', () => {
+    render(<MyPage />);
+
+    fireEvent.click(screen.getByText('이용 규칙'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/notice');
+  });
+
+  it('이용 안내 섹션 제목이 보인다', () => {
+    render(<MyPage />);
+
+    expect(screen.getByText('이용 안내')).toBeInTheDocument();
+  });
+});
