@@ -375,11 +375,11 @@ describe('출석 문의 진입점', () => {
     expect(link).toHaveClass('min-h-[44px]');
   });
 
-  // 같은 예약을 표와 팝오버에서 두세 번 접수하는 학생이 있었다. 이미 문의했으면 목록으로 보낸다.
-  test('이미 문의한 예약은 문의 보기 링크로 바뀐다', () => {
+  // 같은 예약을 표와 팝오버에서 두세 번 접수하는 학생이 있었다. 이미 문의했으면 그 문의로 보낸다.
+  test('이미 문의한 예약은 그 문의의 상세로 가는 문의 보기 링크가 된다', () => {
     useUserReservation.mockReturnValue(loaded([past(7), past(8)]));
     useMyInquiries.mockReturnValue(
-      loaded([{ inquiryId: 1, reservationId: 7 }]),
+      loaded([{ inquiryId: 42, reservationId: 7 }]),
     );
     renderCheck();
 
@@ -388,10 +388,27 @@ describe('출석 문의 진입점', () => {
       screen.getByRole('link', {
         name: '2020-01-01 10:00~11:00 세미나실-1 문의 보기',
       }),
-    ).toHaveAttribute('href', '/inquiry');
+    ).toHaveAttribute('href', '/inquiry/42');
     expect(
       screen.getAllByRole('link', { name: /출석 문의하기$/ }),
     ).toHaveLength(1);
+  });
+
+  // 서버가 접수일 내림차순으로 준다. 같은 예약에 문의가 여럿이면 최근 것으로 보낸다.
+  test('한 예약에 문의가 여럿이면 가장 최근 문의로 보낸다', () => {
+    useUserReservation.mockReturnValue(loaded([past(7)]));
+    useMyInquiries.mockReturnValue(
+      loaded([
+        { inquiryId: 9, reservationId: 7 },
+        { inquiryId: 3, reservationId: 7 },
+      ]),
+    );
+    renderCheck();
+
+    expect(screen.getByRole('link', { name: /문의 보기$/ })).toHaveAttribute(
+      'href',
+      '/inquiry/9',
+    );
   });
 
   // 문의 목록을 못 읽었다고 진입점을 없애면 이의를 아예 못 낸다. 중복 접수보다 그쪽이 나쁘다.
