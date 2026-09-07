@@ -189,7 +189,7 @@ const CreateRoom = () => {
                   </Table.Cell>
                   <Table.Cell
                     onClick={() => {
-                      navigate(`/admin/facility/room/${room.roomId}`);
+                      navigate(`/manage/facility/room/${room.roomId}`);
                     }}
                     className="cursor-pointer hover:underline">
                     {room.roomId}

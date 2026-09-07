@@ -4,7 +4,7 @@ import {
   STATUS_LABELS,
 } from './inquiryLabels';
 
-// 이 문구는 backoffice 앱(src/api/inquiry.api.ts 의 STATUS_LABEL)과
+// 이 문구는 admin-app(src/api/inquiry.api.ts 의 STATUS_LABEL)과
 // 같아야 한다. 레포가 갈려 있어 교차 검증은 못 하므로, 여기서 바꾸면 그쪽도 바꾸라는
 // 표지로 리터럴을 고정한다.
 describe('inquiryLabels', () => {

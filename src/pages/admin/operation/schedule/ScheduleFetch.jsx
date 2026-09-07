@@ -72,7 +72,7 @@ const ScheduleFetch = () => {
                     className="cursor-pointer bg-white"
                     onClick={() => {
                       setSelectedDate(date);
-                      navigate(`/admin/schedule/fetch/${formattedDate}`);
+                      navigate(`/manage/schedule/fetch/${formattedDate}`);
                     }}>
                     <Table.Cell className="text-gray-600 text-lg">
                       {format(date, 'yyyy년 MM월 dd일')}

@@ -161,8 +161,8 @@ const RouterComponent = () => {
                 <Route path="/emailSend" element={<EmailSend />} />
                 {inquiryRoutes}
 
-                {/* 어드민 */}
-                <Route path="/admin" element={<AdminPage />}>
+                {/* 관리자. /admin 은 admin-app 이 쓰므로 이 화면은 /manage 로 비켜 준다 */}
+                <Route path="/manage" element={<AdminPage />}>
                   {/* 통계 */}
                   <Route path="user-statics" element={<UserStatics />} />
                   <Route
