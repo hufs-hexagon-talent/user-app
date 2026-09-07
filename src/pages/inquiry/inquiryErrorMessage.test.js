@@ -56,6 +56,20 @@ describe('inquiryErrorMessage', () => {
     expect(message).toBe('예약을 선택해 주세요.');
   });
 
+  it('CLIENT-001 roomId 는 방을 다시 고르라는 문구로 푼다', () => {
+    expect(
+      inquiryErrorMessage(httpError(400, 'CLIENT-001', [{ field: 'roomId' }])),
+    ).toBe('선택한 방을 찾을 수 없습니다. 목록을 새로 고쳐 주세요.');
+  });
+
+  it('CLIENT-001 occurredAtInRange 는 발생 시각 범위 문구로 푼다', () => {
+    expect(
+      inquiryErrorMessage(
+        httpError(400, 'CLIENT-001', [{ field: 'occurredAtInRange' }]),
+      ),
+    ).toBe('발생 시각은 최근 30일 안이고 미래가 아니어야 합니다.');
+  });
+
   it('CLIENT-001 이어도 예약 관련 field 가 아니면 일반 실패 문구를 돌려준다', () => {
     const message = inquiryErrorMessage(
       httpError(400, 'CLIENT-001', [{ field: 'content' }]),

@@ -11,20 +11,20 @@ const INQUIRY_ERROR_MESSAGES = {
 export const INQUIRY_FAILED_MESSAGE =
   '문의 처리에 실패했습니다. 잠시 뒤 다시 시도해 주세요.';
 
-const RESERVATION_FIELD_MESSAGE = '예약을 선택해 주세요.';
+// CLIENT-001 + errors[].field 로 오는 입력값 오류. @AssertTrue 는 is 를 뗀 파생 프로퍼티명으로 온다
+// (reservationIdPresentForAttendance·occurredAtInRange — 서버에서 실측). 매핑이 없으면 기본 문구.
+const FIELD_MESSAGES = {
+  reservationId: '예약을 선택해 주세요.',
+  reservationIdPresentForAttendance: '예약을 선택해 주세요.',
+  roomId: '선택한 방을 찾을 수 없습니다. 목록을 새로 고쳐 주세요.',
+  occurredAtInRange: '발생 시각은 최근 30일 안이고 미래가 아니어야 합니다.',
+};
 
-// ATTENDANCE 문의는 예약 선택이 필수다. 서버는 이를 CLIENT-001 + errors[].field 로 알리는데,
-// 실제 field 명은 @AssertTrue 파생 프로퍼티명인 reservationIdPresentForAttendance 로 온다
-// (설계 문서 서술의 reservationId 가 아니다 — 서버에서 Bean Validation 으로 실측 확인됨).
-// 어느 이름으로 오든 같은 문구로 잡는다.
-const RESERVATION_FIELDS = [
-  'reservationId',
-  'reservationIdPresentForAttendance',
-];
-
-const hasReservationFieldError = errors =>
-  Array.isArray(errors) &&
-  errors.some(item => RESERVATION_FIELDS.includes(item?.field));
+const fieldMessage = errors => {
+  if (!Array.isArray(errors)) return null;
+  const known = errors.find(item => FIELD_MESSAGES[item?.field]);
+  return known ? FIELD_MESSAGES[known.field] : null;
+};
 
 // 인터셉터가 세션 만료로 확정한 오류는 SessionExpiryWatcher 가 안내하므로 null 을 돌려
 // 스낵바를 생략하게 한다.
@@ -36,8 +36,8 @@ export const inquiryErrorMessage = error => {
   const normalized = typeof code === 'string' ? code.trim() : null;
 
   if (normalized === 'CLIENT-001') {
-    const errors = error?.response?.data?.errors;
-    if (hasReservationFieldError(errors)) return RESERVATION_FIELD_MESSAGE;
+    const message = fieldMessage(error?.response?.data?.errors);
+    if (message) return message;
   }
 
   return INQUIRY_ERROR_MESSAGES[normalized] || INQUIRY_FAILED_MESSAGE;
