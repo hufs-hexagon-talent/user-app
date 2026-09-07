@@ -18,7 +18,7 @@ const Footer = () => {
 
   const handleAdminClick = async () => {
     if (loggedIn && serviceRole === 'ADMIN') {
-      navigate('/admin/user-statics');
+      navigate('/manage/user-statics');
     } else {
       openSnackbar('관리자 외에는 접근 권한이 없습니다.');
       setTimeout(() => {

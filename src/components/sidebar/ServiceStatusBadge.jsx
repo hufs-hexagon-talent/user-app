@@ -25,7 +25,7 @@ const ServiceStatusBadge = () => {
 
   return (
     <Link
-      to="/admin/service-status"
+      to="/manage/service-status"
       className="block border-t border-gray-200 px-4 py-3 hover:bg-gray-100">
       <div className="text-xs text-gray-500">서비스 상태</div>
       <div className="mt-1 flex items-center">

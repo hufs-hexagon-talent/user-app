@@ -9,7 +9,7 @@ const UserStatics = () => {
   // 쿼리 포함하여 이동
   const handleNavigateWithRoles = roles => {
     const query = roles.map(role => `role=${role}`).join('&');
-    navigate(`/admin/user-state?${query}`);
+    navigate(`/manage/user-state?${query}`);
   };
 
   return (

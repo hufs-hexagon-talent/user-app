@@ -234,7 +234,7 @@ const FetchState = () => {
             <Button
               color="dark"
               className="cursor-pointer"
-              onClick={() => navigate('/admin/sign-up')}>
+              onClick={() => navigate('/manage/sign-up')}>
               사용자 추가
             </Button>
             {/* 회원 정보 수정 버튼 */}
@@ -308,37 +308,37 @@ const FetchState = () => {
                 </Table.Cell>
                 <Table.Cell
                   onClick={() =>
-                    navigate(`/admin/fetchReservations/${user.userId}`)
+                    navigate(`/manage/fetchReservations/${user.userId}`)
                   }>
                   {user.serviceRole}
                 </Table.Cell>
                 <Table.Cell
                   onClick={() =>
-                    navigate(`/admin/fetchReservations/${user.userId}`)
+                    navigate(`/manage/fetchReservations/${user.userId}`)
                   }>
                   {user.serial ?? '-'}
                 </Table.Cell>
                 <Table.Cell
                   onClick={() =>
-                    navigate(`/admin/fetchReservations/${user.userId}`)
+                    navigate(`/manage/fetchReservations/${user.userId}`)
                   }>
                   {user.name}
                 </Table.Cell>
                 <Table.Cell
                   onClick={() =>
-                    navigate(`/admin/fetchReservations/${user.userId}`)
+                    navigate(`/manage/fetchReservations/${user.userId}`)
                   }>
                   {user.departmentId === 1 ? '컴퓨터공학부' : '정보통신공학과'}
                 </Table.Cell>
                 <Table.Cell
                   onClick={() =>
-                    navigate(`/admin/fetchReservations/${user.userId}`)
+                    navigate(`/manage/fetchReservations/${user.userId}`)
                   }>
                   {user.roomName ?? '-'}
                 </Table.Cell>
                 <Table.Cell
                   onClick={() =>
-                    navigate(`/admin/fetchReservations/${user.userId}`)
+                    navigate(`/manage/fetchReservations/${user.userId}`)
                   }>
                   {user.email ?? '-'}
                 </Table.Cell>
