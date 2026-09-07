@@ -9,6 +9,8 @@ import {
 import { format } from 'date-fns';
 import { Button, Modal, Table } from 'flowbite-react';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
+import { Link } from 'react-router-dom';
+import { useMyInquiries } from '../../api/inquiry.api';
 import {
   useNoShow,
   useLatestReservation,
@@ -17,6 +19,13 @@ import {
 } from '../../api/reservation.api';
 import { useMyInfo, useBlockedPeriod } from '../../api/user.api';
 import { useCustomSnackbars } from '../../components/snackbar/SnackBar';
+import {
+  formatReservationTime,
+  formatRoom,
+  isDisputable,
+  reservationStateLabel,
+  sortReservationsLatestFirst,
+} from '../inquiry/reservationView';
 import { cancelReservationErrorMessage } from './cancelReservationMessage';
 
 const Check = () => {
@@ -33,6 +42,9 @@ const Check = () => {
     refetch: refetchReservations,
   } = useUserReservation();
   const { data: me } = useMyInfo();
+  // 이미 문의한 예약은 "문의 보기" 로 — 표와 팝오버에서 같은 건을 두 번 접수하지 않게.
+  // 목록 조회가 실패·로딩이면 그냥 "문의" 로 둔다(중복 접수는 서버가 막지 않지만 드물다).
+  const { data: inquiries } = useMyInquiries();
   const { data: latest } = useLatestReservation();
   const { mutateAsync: deleteReservation, isPending: isDeleting } =
     useDeleteReservation();
@@ -91,16 +103,25 @@ const Check = () => {
     setCurrentPage(value);
   };
 
+  const inquiredReservationIds = new Set(
+    (Array.isArray(inquiries) ? inquiries : [])
+      .map(inquiry => inquiry.reservationId)
+      .filter(reservationId => reservationId != null),
+  );
+
+  // 서버는 생성 역순으로 준다 — 내일 예약을 먼저 잡고 오늘 예약을 나중에 잡으면 표에서 뒤집힌다.
+  const sortedReservations = sortReservationsLatestFirst(reservations);
+
   // count를 계산하고 NaN이 아닐 때만 사용할 수 있도록 안전한 변수를 생성합니다.
   const pageCount = reservations
-    ? Math.ceil(reservations.length / itemsPerPage)
+    ? Math.ceil(sortedReservations.length / itemsPerPage)
     : 0;
 
   // 마지막 페이지의 유일한 예약을 취소하면 현재 페이지가 범위를 벗어나 빈 표만 남는다.
   const safePage = pageCount > 0 ? Math.min(currentPage, pageCount) : 1;
 
   const startIndex = (safePage - 1) * itemsPerPage;
-  const paginatedReservations = reservations?.slice(
+  const paginatedReservations = sortedReservations.slice(
     startIndex,
     startIndex + itemsPerPage,
   );
@@ -108,6 +129,26 @@ const Check = () => {
   // 조회 실패를 빈 목록으로 오인하지 않도록 로딩·실패·없음을 따로 보여준다.
   const isReservationsLoaded = !isReservationsPending && !isReservationsError;
   const hasReservations = isReservationsLoaded && reservations?.length > 0;
+
+  // 문제를 보고 있는 화면에서 바로 이의를 시작하게 한다 — 폼이 예약을 확정한 채로 열린다.
+  const actionLinkClass =
+    'inline-flex min-h-[44px] items-center px-2 font-medium text-[#002D56] hover:underline';
+  const renderInquiryLink = reservation =>
+    inquiredReservationIds.has(reservation.reservationId) ? (
+      <Link
+        to="/inquiry"
+        aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 문의 보기`}
+        className={actionLinkClass}>
+        문의 보기
+      </Link>
+    ) : (
+      <Link
+        to={`/inquiry/new?category=ATTENDANCE&reservationId=${reservation.reservationId}`}
+        aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 출석 문의하기`}
+        className={actionLinkClass}>
+        문의
+      </Link>
+    );
 
   return (
     <div>
@@ -125,7 +166,7 @@ const Check = () => {
             <Table.HeadCell className="px-2 py-4">시작 시간</Table.HeadCell>
             <Table.HeadCell className="px-2 py-4">종료 시간</Table.HeadCell>
             <Table.HeadCell className="px-2 py-4">
-              <span className="sr-only">삭제</span>
+              <span className="sr-only">관리</span>
             </Table.HeadCell>
           </Table.Head>
           <Table.Body className="divide-y">
@@ -168,11 +209,7 @@ const Check = () => {
                     key={index}
                     className="bg-white dark:border-gray-700 dark:bg-gray-800 text-center text-gray-900">
                     <Table.Cell>
-                      {reservation.reservationState === 'VISITED' ? (
-                        '출석'
-                      ) : reservation.reservationState === 'NOT_VISITED' ? (
-                        '미출석'
-                      ) : (
+                      {reservationStateLabel(reservation) === '처리됨' ? (
                         <Tooltip
                           title={
                             <Typography sx={{ fontSize: '1.2em' }}>
@@ -182,10 +219,12 @@ const Check = () => {
                           }>
                           <span>처리됨</span>
                         </Tooltip>
+                      ) : (
+                        reservationStateLabel(reservation)
                       )}
                     </Table.Cell>
                     <Table.Cell className="px-2 py-4">
-                      {`${reservation.roomName}-${reservation.partitionNumber}`}
+                      {formatRoom(reservation)}
                     </Table.Cell>
                     <Table.Cell className="px-2 py-4">
                       {format(start, 'MM-dd')}
@@ -197,18 +236,22 @@ const Check = () => {
                       {format(end, 'HH:mm')}
                     </Table.Cell>
                     <Table.Cell className="px-2 py-4">
-                      {!(
-                        isPast || reservation.reservationState === 'VISITED'
-                      ) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenModal(reservation.reservationId);
-                          }}
-                          className="font-medium text-red-600 hover:underline dark:text-cyan-500">
-                          삭제
-                        </button>
-                      )}
+                      {/* 지난 미출석·처리됨은 문의로, 앞으로의 예약은 삭제로. 삭제 조건은 현행 그대로 —
+                          시작 15분 전 체크인으로 VISITED 인데 아직 시작 전인 행이 있다. */}
+                      {isDisputable(reservation)
+                        ? renderInquiryLink(reservation)
+                        : !(
+                            isPast || reservation.reservationState === 'VISITED'
+                          ) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenModal(reservation.reservationId);
+                              }}
+                              className="font-medium text-red-600 hover:underline dark:text-cyan-500">
+                              삭제
+                            </button>
+                          )}
                     </Table.Cell>
                   </Table.Row>
                 );
@@ -297,6 +340,9 @@ const Check = () => {
                   <Table.HeadCell>호실</Table.HeadCell>
                   <Table.HeadCell>시작 시간</Table.HeadCell>
                   <Table.HeadCell>종료 시간</Table.HeadCell>
+                  <Table.HeadCell>
+                    <span className="sr-only">관리</span>
+                  </Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y text-center">
                   {noShow.reservationList?.reservationInfoResponses?.map(
@@ -305,9 +351,7 @@ const Check = () => {
                         key={index}
                         className="bg-white dark:border-gray-700 dark:bg-gray-800">
                         <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                          {reservation.reservationState === 'NOT_VISITED'
-                            ? '미출석'
-                            : ''}
+                          {reservationStateLabel(reservation)}
                         </Table.Cell>
                         <Table.Cell>
                           {format(
@@ -315,12 +359,17 @@ const Check = () => {
                             'yyyy-MM-dd',
                           )}
                         </Table.Cell>
-                        <Table.Cell>{`${reservation.roomName}-${reservation.partitionNumber}`}</Table.Cell>
+                        <Table.Cell>{formatRoom(reservation)}</Table.Cell>
                         <Table.Cell>
                           {format(reservation.reservationStartTime, 'HH:mm')}
                         </Table.Cell>
                         <Table.Cell>
                           {format(reservation.reservationEndTime, 'HH:mm')}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {isDisputable(reservation)
+                            ? renderInquiryLink(reservation)
+                            : null}
                         </Table.Cell>
                       </Table.Row>
                     ),

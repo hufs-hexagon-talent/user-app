@@ -655,6 +655,7 @@ const InquiryForm = () => {
           setFocusPrimary(true);
         }}
         selectedId={selectedId}
+        category={category}
         reservations={reservations}
         isPending={isReservationsPending}
         isError={isReservationsError}
