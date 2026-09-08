@@ -4,8 +4,10 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { modalTheme } from '../../components/modal/modalTheme';
 
 import ReservationPickerModal, {
+  DISPUTABLE_SECTION_TITLE,
   INITIAL_LIMIT,
   MORE_STEP,
+  OTHER_SECTION_TITLE,
   PICKER_EMPTY_ATTENDANCE_HINT,
   PICKER_EMPTY_MESSAGE,
   PICKER_ERROR_MESSAGE,
@@ -69,7 +71,7 @@ const renderPicker = (over = {}) => {
   const utils = render(<ReservationPickerModal {...props} />);
   return { ...utils, props };
 };
-// 필터 칩도 aria-pressed 를 갖는다. 카드만 세려면 접근 이름(날짜·호실·상태)까지 있는 버튼을 고른다.
+// 카드만 세려면 접근 이름(날짜·호실·상태)까지 있는 버튼을 고른다("더 보기" 는 둘 다 없다).
 const cardButtons = () =>
   screen
     .getAllByRole('button')
@@ -82,9 +84,6 @@ const selectedCards = () =>
   cardButtons().filter(
     button => button.getAttribute('aria-pressed') === 'true',
   );
-const chip = name =>
-  screen.getByRole('button', { name: new RegExp(`^${name}`) });
-
 describe('ReservationPickerModal 기본', () => {
   it('열리면 dialog 에 공용 테마가 적용되고 제목이 하나다', () => {
     renderPicker();
@@ -138,76 +137,95 @@ describe('ReservationPickerModal 기본', () => {
   });
 });
 
-describe('ReservationPickerModal 필터', () => {
-  // 노쇼는 4회면 차단이라 이 집합은 사실상 한 자릿수 — 학생이 찾는 예약이 첫 화면에 온다.
-  it('출석 유형은 미출석·처리됨만 기본으로 보이고 칩에 건수가 붙는다', () => {
+describe('ReservationPickerModal 구획', () => {
+  // 필터로 좁히면 "내 예약이 없어졌다" 로 오독하고, 기본값이 언제 뒤집히는지도 알 수 없다.
+  // 숨기지 않고 위로 올린다 — 노쇼는 4회면 차단이라 이 구획은 사실상 한 자릿수다.
+  it('출석 유형은 문제 있는 예약을 맨 위 구획으로 올리고 나머지도 함께 보여준다', () => {
     renderPicker();
 
-    expect(chip('미출석·처리됨')).toHaveAttribute('aria-pressed', 'true');
-    expect(chip('미출석·처리됨')).toHaveTextContent('2');
-    expect(chip('전체')).toHaveTextContent('4');
+    expect(
+      screen.getByRole('heading', { name: `${DISPUTABLE_SECTION_TITLE} 2건` }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: OTHER_SECTION_TITLE }),
+    ).toBeInTheDocument();
     expect(cardButtons().map(b => b.getAttribute('aria-label'))).toEqual([
       NAME_NOSHOW,
       NAME_PROCESSED,
+      NAME_UPCOMING,
+      NAME_VISITED,
     ]);
-
-    fireEvent.click(chip('전체'));
-    expect(cardButtons()).toHaveLength(4);
-    expect(
-      screen.getByRole('button', { name: NAME_VISITED }),
-    ).toBeInTheDocument();
   });
 
-  // 기타 문의는 지금·앞으로의 예약을 연결한다. 과거 미출석만 보이면 정작 연결하려던 예약이 없다.
-  it('기타 유형과 유형 없음은 전체가 기본이다', () => {
+  it('필터 칩은 없다', () => {
+    renderPicker();
+
+    expect(screen.queryByRole('group', { name: '예약 필터' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^전체/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^미출석·처리됨/ })).toBeNull();
+  });
+
+  // 기타 문의는 출석과 무관하다. 출석 구획이 뜨면 그냥 노이즈다.
+  it('기타 유형과 유형 없음은 구획 없이 날짜 그룹만 그린다', () => {
     const { unmount } = renderPicker({ category: 'ETC' });
-    expect(chip('전체')).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByRole('heading', {
+        name: new RegExp(DISPUTABLE_SECTION_TITLE),
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: OTHER_SECTION_TITLE }),
+    ).toBeNull();
     expect(cardButtons()).toHaveLength(4);
     unmount();
 
     renderPicker({ category: undefined });
-    expect(chip('전체')).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByRole('heading', {
+        name: new RegExp(DISPUTABLE_SECTION_TITLE),
+      }),
+    ).toBeNull();
   });
 
-  it('미출석·처리됨이 0건이면 전체로 열리고 안내 한 줄을 보인다', () => {
+  it('출석 유형이어도 대상이 0건이면 구획 없이 안내만 보인다', () => {
     renderPicker({ reservations: [VISITED, UPCOMING] });
 
-    expect(chip('전체')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText(PICKER_NO_DISPUTABLE_MESSAGE)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', {
+        name: new RegExp(DISPUTABLE_SECTION_TITLE),
+      }),
+    ).toBeNull();
+    expect(cardButtons()).toHaveLength(2);
   });
 
-  // 기타 문의에서 이 칩을 직접 누르면 목록이 비는데, 안내가 없으면 고장으로 읽힌다.
-  it('기타 문의에서 미출석·처리됨 칩을 눌러 0건이 되면 안내를 보인다', () => {
-    renderPicker({ reservations: [VISITED, UPCOMING], category: 'ETC' });
-    expect(screen.queryByText(PICKER_NO_DISPUTABLE_MESSAGE)).toBeNull();
-
-    fireEvent.click(chip('미출석·처리됨'));
-
-    expect(cardButtons()).toHaveLength(0);
-    expect(screen.getByText(PICKER_NO_DISPUTABLE_MESSAGE)).toBeInTheDocument();
-  });
-
-  // 수정 모드에서 출석 예약이 연결된 문의를 열면 선택된 카드가 기본 필터에 없어 "풀렸다" 고 오독한다.
-  it('선택된 예약이 미출석·처리됨이 아니면 전체로 연다', () => {
+  // 수정 모드에서 출석한 예약이 연결된 문의를 열어도 선택 카드가 그대로 보여야 한다.
+  it('선택된 예약이 문제 없는 예약이어도 그대로 보인다', () => {
     renderPicker({ selectedId: VISITED.reservationId });
 
-    expect(chip('전체')).toHaveAttribute('aria-pressed', 'true');
     expect(selectedCards()[0]).toHaveAccessibleName(NAME_VISITED);
   });
 
-  // 응답이 뒤늦게 오면 목록이 손 밑에서 갈아치워진다 — 초기 필터는 여는 순간 한 번만 정한다.
-  it('열린 뒤 목록이 바뀌어도 필터는 그대로고, 다시 열면 초기값으로 돌아간다', () => {
-    const { props, rerender } = renderPicker({ reservations: [VISITED] });
-    expect(chip('전체')).toHaveAttribute('aria-pressed', 'true');
+  // 모달 제목이 h3(flowbite 기본값)이다. 구획이 h4, 그 안의 날짜가 h5 여야 단계를 안 건너뛴다.
+  it('구획이 있으면 날짜 제목이 구획 제목보다 한 단계 아래다', () => {
+    const { unmount } = renderPicker();
 
-    rerender(<ReservationPickerModal {...props} reservations={ALL} />);
-    expect(chip('전체')).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByRole('heading', {
+        name: `${DISPUTABLE_SECTION_TITLE} 2건`,
+        level: 4,
+      }),
+    ).toBeInTheDocument();
+    // 08-05 는 미출석(구획 1)과 출석(구획 2)에 하나씩 있어 날짜 제목도 둘이다.
+    expect(
+      screen.getAllByRole('heading', { name: '2026-08-05 (수)', level: 5 }),
+    ).toHaveLength(2);
+    unmount();
 
-    rerender(
-      <ReservationPickerModal {...props} reservations={ALL} show={false} />,
-    );
-    rerender(<ReservationPickerModal {...props} reservations={ALL} show />);
-    expect(chip('미출석·처리됨')).toHaveAttribute('aria-pressed', 'true');
+    renderPicker({ category: 'ETC' });
+    expect(
+      screen.getByRole('heading', { name: '2026-08-05 (수)', level: 4 }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -232,7 +250,7 @@ describe('ReservationPickerModal 날짜 그룹·더 보기', () => {
     ).not.toHaveTextContent('2099-01-01');
   });
 
-  it('전체는 처음 다섯 건만 보이고 더 보기로 열 건씩 늘어난다', () => {
+  it('처음 여섯 건만 보이고 더 보기로 여섯 건씩 늘어난다', () => {
     const many = Array.from({ length: 17 }, (_, i) => ({
       ...VISITED,
       reservationId: 100 + i,
@@ -246,13 +264,13 @@ describe('ReservationPickerModal 날짜 그룹·더 보기', () => {
       screen.getByRole('button', { name: `더 보기 (${MORE_STEP}건)` }),
     );
     expect(cardButtons()).toHaveLength(INITIAL_LIMIT + MORE_STEP);
-    fireEvent.click(screen.getByRole('button', { name: '더 보기 (2건)' }));
+    fireEvent.click(screen.getByRole('button', { name: '더 보기 (5건)' }));
     expect(cardButtons()).toHaveLength(17);
     expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull();
   });
 
   // 선택 항목 펼침과 "더 보기" 가 카운터를 공유하면 첫 클릭이 아무것도 늘리지 못한다.
-  it('선택 항목까지 펼쳐진 상태에서도 더 보기 한 번에 열 건이 늘어난다', () => {
+  it('선택 항목까지 펼쳐진 상태에서도 더 보기 한 번에 여섯 건이 늘어난다', () => {
     const many = Array.from({ length: 30 }, (_, i) => ({
       ...VISITED,
       reservationId: 100 + i,
@@ -264,8 +282,10 @@ describe('ReservationPickerModal 날짜 그룹·더 보기', () => {
 
     // 선택 카드(21번째)까지 펼쳐서 열린다.
     expect(cardButtons()).toHaveLength(21);
-    fireEvent.click(screen.getByRole('button', { name: '더 보기 (9건)' }));
-    expect(cardButtons()).toHaveLength(30);
+    fireEvent.click(
+      screen.getByRole('button', { name: `더 보기 (${MORE_STEP}건)` }),
+    );
+    expect(cardButtons()).toHaveLength(21 + MORE_STEP);
   });
 
   // 마지막 클릭에서 버튼이 자기 자신을 지운다 — 포커스가 body 로 떨어지면 목록에서 위치를 잃는다.
@@ -278,13 +298,14 @@ describe('ReservationPickerModal 날짜 그룹·더 보기', () => {
     }));
     renderPicker({ reservations: many, category: 'ETC' });
 
-    fireEvent.click(screen.getByRole('button', { name: '더 보기 (3건)' }));
+    fireEvent.click(screen.getByRole('button', { name: '더 보기 (2건)' }));
 
     expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull();
     expect(cardButtons()[INITIAL_LIMIT]).toHaveFocus();
   });
 
-  it('더 보기는 전체 필터에서만 나온다', () => {
+  // 예전에는 미출석 필터가 전량을 그렸다. 미출석이 많은 학생은 그것만으로도 벽이 된다.
+  it('문제 있는 예약만 많아도 여섯 건까지만 보이고 더 보기가 나온다', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({
       ...NOSHOW,
       reservationId: 100 + i,
@@ -293,7 +314,11 @@ describe('ReservationPickerModal 날짜 그룹·더 보기', () => {
     }));
     renderPicker({ reservations: many });
 
-    expect(chip('미출석·처리됨')).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByRole('heading', { name: `${DISPUTABLE_SECTION_TITLE} 8건` }),
+    ).toBeInTheDocument();
+    expect(cardButtons()).toHaveLength(INITIAL_LIMIT);
+    fireEvent.click(screen.getByRole('button', { name: '더 보기 (2건)' }));
     expect(cardButtons()).toHaveLength(8);
     expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull();
   });
@@ -337,7 +362,7 @@ describe('ReservationPickerModal 상태', () => {
     renderPicker({ reservations: undefined, isPending: true });
 
     expect(screen.getByText(PICKER_LOADING_MESSAGE)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /전체/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull();
   });
 
   it('데이터가 없고 실패하면 실패 문구와 다시 시도를 보여준다', () => {
@@ -352,7 +377,7 @@ describe('ReservationPickerModal 상태', () => {
   it('실패했어도 캐시 목록이 있으면 목록을 그리고 배너만 얹는다', () => {
     const { props } = renderPicker({ isError: true });
 
-    expect(cardButtons()).toHaveLength(2);
+    expect(cardButtons()).toHaveLength(4);
     expect(screen.getByText(PICKER_STALE_MESSAGE)).toBeInTheDocument();
     props.refetch.mockClear();
     const retry = screen.getByRole('button', { name: '다시 시도' });

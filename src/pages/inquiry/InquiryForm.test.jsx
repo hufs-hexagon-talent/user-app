@@ -123,12 +123,7 @@ const pickCard = name =>
   );
 const closePicker = () =>
   fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
-// 출석 유형 피커는 미출석·처리됨만 기본으로 보인다. 출석한 예약을 고르려면 전체 칩을 먼저 누른다.
-const showAllReservations = () =>
-  fireEvent.click(
-    within(screen.getByRole('dialog')).getByRole('button', { name: /^전체/ }),
-  );
-// 필터 칩도 aria-pressed 를 가지므로 카드(접근 이름이 있는 버튼)만 고른다.
+// 카드(접근 이름이 있는 버튼)만 고른다.
 const pickedCardInDialog = () =>
   within(screen.getByRole('dialog'))
     .getAllByRole('button', { pressed: true })
@@ -300,7 +295,6 @@ describe('InquiryForm 출석·예약 이의', () => {
     const { unmount } = render(<InquiryForm />);
     chooseCategory('출석·예약 이의');
     openPicker();
-    showAllReservations();
     const dialog = screen.getByRole('dialog');
     expect(
       within(dialog).getByRole('button', { name: CARD_B }),
@@ -331,7 +325,6 @@ describe('InquiryForm 출석·예약 이의', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '관련 예약 변경' }));
     expect(pickedCardInDialog()[0]).toHaveAccessibleName(CARD_A);
-    showAllReservations();
     pickCard(CARD_B);
 
     expect(screen.getByText('302-B')).toBeInTheDocument();
@@ -1029,7 +1022,6 @@ describe('InquiryForm 수정 모드', () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '다른 예약으로 변경' }));
-    showAllReservations();
     pickCard(CARD_B);
     expect(screen.getByText('302-B')).toBeInTheDocument();
     submit();

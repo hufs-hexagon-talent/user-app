@@ -22,17 +22,13 @@ export const PICKER_EMPTY_ATTENDANCE_HINT =
   '출석 문제인데 예약을 특정할 수 없으면 유형을 기타로 바꿔 접수해 주세요.';
 export const PICKER_NO_DISPUTABLE_MESSAGE =
   '미출석으로 표시된 예약이 없습니다.';
-export const FILTER_DISPUTABLE = 'disputable';
-export const FILTER_ALL = 'all';
-export const INITIAL_LIMIT = 5;
-export const MORE_STEP = 10;
+export const DISPUTABLE_SECTION_TITLE = '출석 문제가 있는 예약';
+export const OTHER_SECTION_TITLE = '그 밖의 예약';
+export const INITIAL_LIMIT = 6;
+export const MORE_STEP = 6;
 
 const retryButtonClass =
   'min-h-[44px] rounded-md bg-[#002D56] px-4 py-2 text-sm text-white focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
-const chipClass =
-  'min-h-[36px] rounded-full border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
-const chipSelectedClass =
-  'min-h-[36px] rounded-full border border-[#002D56] bg-[#002D56] px-3 text-xs font-semibold text-white focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
 const moreButtonClass =
   'min-h-[44px] rounded-md border border-gray-300 bg-white px-4 text-sm font-semibold text-[#002D56] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
 
@@ -42,6 +38,9 @@ const moreButtonClass =
 // 분기 순서가 중요하다: 목록이 있으면 isError 여도 목록을 그린다. react-query v5 는 재조회가
 // 실패하면 data 를 유지한 채 status 만 error 로 바꾸고 다음 성공 전까지 error 로 눌러앉는다 —
 // 오류를 먼저 보면 손에 쥔 캐시를 버려 오프라인에서 출석 이의 접수가 막힌다.
+// 좁히기(필터 칩)는 두지 않는다. 목록 길이는 6건 캡 + "더 보기" 가 잡고, "학생이 찾는 예약을
+// 위로" 는 구획이 잡는다. 칩 두 개(전체 ⊃ 미출석)는 상호배타가 아니라 aria-pressed 로밖에
+// 못 그렸고, 기본값이 조건 세 개로 뒤집혀 학생이 이유를 알 수 없었다.
 const ReservationPickerModal = ({
   show,
   onClose,
@@ -54,7 +53,6 @@ const ReservationPickerModal = ({
   category,
 }) => {
   const dialogRef = useRef(null);
-  const [filter, setFilter] = useState(FILTER_ALL);
   const [limit, setLimit] = useState(INITIAL_LIMIT);
   // "더 보기" 는 마지막 클릭에서 자기 자신을 언마운트한다(hiddenCount 가 0 이 된다). 그대로 두면
   // 포커스가 <body> 로 떨어져 다음 Tab 이 문서 처음부터 시작한다 — 새로 드러난 첫 카드로 옮긴다.
@@ -65,11 +63,6 @@ const ReservationPickerModal = ({
     focusCardRef.current?.focus();
     setFocusCardIndex(null);
   }, [focusCardIndex]);
-  // 초기 필터는 여는 순간의 값으로 한 번 정한다. 의존성에 목록을 넣으면 응답이 뒤늦게 와서
-  // 손 밑에서 목록이 갈아치워진다 — 그래서 최신 값은 ref 로 읽고 effect 는 show 만 본다.
-  const latestRef = useRef({ reservations, selectedId, category });
-  latestRef.current = { reservations, selectedId, category };
-
   // 열릴 때마다 한 번 다시 읽는다 — 예약 직후·키오스크 출석 직후의 상태를 반영한다.
   // 캐시가 있으면 그 목록을 먼저 보여 주고 응답이 오면 바뀐다.
   useEffect(() => {
@@ -77,32 +70,25 @@ const ReservationPickerModal = ({
   }, [show, refetch]);
 
   useEffect(() => {
-    if (!show) return;
-    const current = latestRef.current;
-    const list = sortReservationsLatestFirst(current.reservations);
-    const selected = list.find(r => r.reservationId === current.selectedId);
-    const disputableCount = list.filter(r => isDisputable(r)).length;
-    // 출석 이의만 미출석·처리됨으로 좁힌다. 0건이거나 선택된 예약이 그 밖이면 전체로 —
-    // 선택된 카드가 안 보이면 학생이 연결이 풀렸다고 오독한다.
-    const useDisputable =
-      current.category === 'ATTENDANCE' &&
-      disputableCount > 0 &&
-      (!selected || isDisputable(selected));
-    setFilter(useDisputable ? FILTER_DISPUTABLE : FILTER_ALL);
-    setLimit(INITIAL_LIMIT);
+    if (show) setLimit(INITIAL_LIMIT);
   }, [show]);
 
   const list = sortReservationsLatestFirst(reservations);
   const disputable = list.filter(r => isDisputable(r));
-  const filtered = filter === FILTER_DISPUTABLE ? disputable : list;
+  // 판정을 한 번만 하고 id 로 나눈다. isDisputable 은 now 를 기본값으로 받으므로 렌더 중에
+  // 여러 번 부르면 종료 시각 경계에 걸친 예약이 두 구획 사이에서 흔들릴 수 있다.
+  const disputableIds = new Set(disputable.map(r => r.reservationId));
+  // 출석 이의는 학생이 찾는 예약이 사실상 정해져 있다. 필터로 숨기는 대신 맨 위로 올린다 —
+  // 숨기면 "내 예약이 없어졌다" 오독이 생기고, 기본 필터가 언제 뒤집히는지 학생이 알 수 없다.
+  const hasSections = category === 'ATTENDANCE' && disputable.length > 0;
+  const ordered = hasSections
+    ? [...disputable, ...list.filter(r => !disputableIds.has(r.reservationId))]
+    : list;
   // 선택된 항목이 잘린 범위 밖이면 그 항목까지 펼쳐서 연다.
-  const selectedIndex = filtered.findIndex(r => r.reservationId === selectedId);
-  const effectiveLimit =
-    filter === FILTER_ALL
-      ? Math.max(limit, selectedIndex + 1)
-      : filtered.length;
-  const visible = filtered.slice(0, effectiveLimit);
-  const hiddenCount = filtered.length - visible.length;
+  const selectedIndex = ordered.findIndex(r => r.reservationId === selectedId);
+  const effectiveLimit = Math.max(limit, selectedIndex + 1);
+  const visible = ordered.slice(0, effectiveLimit);
+  const hiddenCount = ordered.length - visible.length;
   // 날짜 그룹으로 감싸도 "몇 번째 카드" 를 알아야 포커스를 옮길 수 있다.
   const indexById = new Map(
     visible.map((reservation, index) => [reservation.reservationId, index]),
@@ -138,6 +124,26 @@ const ReservationPickerModal = ({
     );
   };
 
+  // 모달 제목이 h3(flowbite Modal.Header 기본값)이라 구획은 h4, 그 안의 날짜는 h5 다.
+  // 구획이 없으면 날짜가 제목 바로 아래 단계이므로 h4 로 올린다.
+  const renderDateGroups = (items, DateHeading) => (
+    <ul className="space-y-3">
+      {groupByDate(items).map(group => (
+        <li key={group.key}>
+          <DateHeading className="mb-1 text-xs font-semibold text-gray-600">
+            {group.heading}
+          </DateHeading>
+          <ul className="space-y-2">{group.items.map(renderCard)}</ul>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const visibleDisputable = visible.filter(r =>
+    disputableIds.has(r.reservationId),
+  );
+  const visibleOther = visible.filter(r => !disputableIds.has(r.reservationId));
+
   let body;
   if (isPending) {
     body = (
@@ -162,41 +168,38 @@ const ReservationPickerModal = ({
             </button>
           </div>
         )}
-        <div role="group" aria-label="예약 필터" className="mb-3 flex gap-2">
-          <button
-            type="button"
-            aria-pressed={filter === FILTER_DISPUTABLE}
-            onClick={() => setFilter(FILTER_DISPUTABLE)}
-            className={
-              filter === FILTER_DISPUTABLE ? chipSelectedClass : chipClass
-            }>
-            미출석·처리됨 {disputable.length}
-          </button>
-          <button
-            type="button"
-            aria-pressed={filter === FILTER_ALL}
-            onClick={() => setFilter(FILTER_ALL)}
-            className={filter === FILTER_ALL ? chipSelectedClass : chipClass}>
-            전체 {list.length}
-          </button>
-        </div>
-        {/* 기타 문의에서 이 칩을 직접 눌러도 빈 목록만 남지 않게, 필터가 걸렸으면 같이 안내한다. */}
-        {disputable.length === 0 &&
-          (category === 'ATTENDANCE' || filter === FILTER_DISPUTABLE) && (
-            <p className="mb-3 text-sm text-gray-600 break-keep">
-              {PICKER_NO_DISPUTABLE_MESSAGE}
-            </p>
-          )}
-        <ul className="space-y-3">
-          {groupByDate(visible).map(group => (
-            <li key={group.key}>
-              <h3 className="mb-1 text-xs font-semibold text-gray-600">
-                {group.heading}
-              </h3>
-              <ul className="space-y-2">{group.items.map(renderCard)}</ul>
-            </li>
-          ))}
-        </ul>
+        {/* 출석 이의인데 대상이 하나도 없으면 왜 안 보이는지 알려 준다. 구획은 그리지 않는다. */}
+        {disputable.length === 0 && category === 'ATTENDANCE' && (
+          <p className="mb-3 text-sm text-gray-600 break-keep">
+            {PICKER_NO_DISPUTABLE_MESSAGE}
+          </p>
+        )}
+        {hasSections ? (
+          <div className="space-y-4">
+            {visibleDisputable.length > 0 && (
+              <section aria-labelledby="picker-disputable-heading">
+                <h4
+                  id="picker-disputable-heading"
+                  className="mb-2 text-sm font-bold text-black">
+                  {DISPUTABLE_SECTION_TITLE} {disputable.length}건
+                </h4>
+                {renderDateGroups(visibleDisputable, 'h5')}
+              </section>
+            )}
+            {visibleOther.length > 0 && (
+              <section aria-labelledby="picker-other-heading">
+                <h4
+                  id="picker-other-heading"
+                  className="mb-2 text-sm font-bold text-black">
+                  {OTHER_SECTION_TITLE}
+                </h4>
+                {renderDateGroups(visibleOther, 'h5')}
+              </section>
+            )}
+          </div>
+        ) : (
+          renderDateGroups(visible, 'h4')
+        )}
         {hiddenCount > 0 && (
           <div className="mt-3 flex justify-center">
             <button
