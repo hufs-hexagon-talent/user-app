@@ -1,8 +1,15 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import fs from 'fs';
 import path from 'path';
 
+import { fetchDate } from '../../../api/policySchedule.api';
 import { useReservations, useReserve } from '../../../api/reservation.api';
 import { modalTheme as reserveModalTheme } from '../../../components/modal/modalTheme';
 
@@ -29,9 +36,14 @@ jest.mock('react-router-dom', () => ({ useNavigate: () => jest.fn() }));
 jest.mock('react-simple-snackbar', () => ({
   useSnackbar: () => [jest.fn(), jest.fn()],
 }));
+// 달력은 그리지 않되 받은 props 는 남겨 둔다 — includeDates 가 빈 배열이면 달력이 통째로 잠긴다.
+const mockDatePickerProps = jest.fn();
 jest.mock('react-datepicker', () => ({
   __esModule: true,
-  default: () => null,
+  default: props => {
+    mockDatePickerProps(props);
+    return null;
+  },
   registerLocale: jest.fn(),
 }));
 jest.mock('../../admin/banner/Banner', () => () => null);
@@ -53,9 +65,121 @@ const selectedCells = container =>
 const slotCells = container =>
   Array.from(container.querySelectorAll('tbody [data-time-index]'));
 
+const query = (overrides = {}) => ({
+  data: [room()],
+  isPending: false,
+  isError: false,
+  refetch: jest.fn(),
+  ...overrides,
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   useReserve.mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+});
+
+describe('예약 현황 재조회 실패', () => {
+  // react-query v5 는 재조회가 실패해도 data 를 유지한다. 30초 폴링이나 앱 복귀 재조회가 한 번
+  // 실패했다고 표를 오류 카드로 바꾸면, 모바일은 유일한 예약 버튼(SelectionBar)까지 사라져
+  // 다음 폴링이 성공할 때까지(최대 30초) 예약을 진행할 수 없다.
+  it('받아 둔 표가 있으면 표와 예약하기를 남기고 위에 안내만 얹는다', () => {
+    useReservations.mockReturnValue(query({ isError: true }));
+
+    const { container } = render(<RoomPage />);
+    // SelectionBar 의 예약하기는 칸을 골라야 나타난다. 데스크톱 버튼과 함께 둘이어야 한다.
+    fireEvent.click(slotCells(container)[0]);
+
+    expect(selectedCells(container)).toBe(1);
+    expect(screen.getAllByText('예약하기')).toHaveLength(2);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '최신 예약 현황을 못 받아왔습니다.',
+    );
+    expect(
+      screen.queryByText('예약 현황을 불러오지 못했습니다.'),
+    ).toBeNull();
+  });
+
+  it('안내의 다시 시도는 재조회를 부른다', () => {
+    const refetch = jest.fn();
+    useReservations.mockReturnValue(query({ isError: true, refetch }));
+
+    render(<RoomPage />);
+    fireEvent.click(
+      within(screen.getByRole('status')).getByRole('button', {
+        name: '다시 시도',
+      }),
+    );
+
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('받아 둔 표 없이 실패했을 때만 오류 카드를 보여준다', () => {
+    useReservations.mockReturnValue(query({ data: undefined, isError: true }));
+
+    render(<RoomPage />);
+
+    expect(
+      screen.getByText('예약 현황을 불러오지 못했습니다.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('고른 칸은 재조회가 실패해도 그대로다', () => {
+    useReservations.mockReturnValue(query());
+    const { container, rerender } = render(<RoomPage />);
+    fireEvent.click(slotCells(container)[0]);
+
+    useReservations.mockReturnValue(query({ isError: true }));
+    rerender(<RoomPage />);
+
+    expect(selectedCells(container)).toBe(1);
+  });
+});
+
+describe('예약 가능한 날짜 목록', () => {
+  // 방학처럼 운영 일정이 0건이면 서버는 200 + 빈 목록을 준다(예외가 아니라 catch 를 안 탄다).
+  // react-datepicker 는 includeDates=[] 를 "허용 날짜 0개" 로 읽어 35칸이 전부 잠기고
+  // 월 이동 화살표도 렌더하지 않는다. 그 옆에 "다른 날짜를 선택해 주세요" 가 떠 있었다.
+  it('목록이 비어 있으면 달력 제한을 풀고 사실대로 안내한다', async () => {
+    fetchDate.mockResolvedValueOnce([]);
+    useReservations.mockReturnValue(query({ data: [] }));
+
+    render(<RoomPage />);
+
+    expect(
+      await screen.findByText(/지금은 예약할 수 있는 날짜가 없습니다/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/다른 날짜를 선택해 주세요/)).toBeNull();
+    const props = mockDatePickerProps.mock.calls.at(-1)[0];
+    expect(props.includeDates).toBeNull();
+    expect(props.showDisabledMonthNavigation).toBe(true);
+  });
+
+  it('목록이 있으면 그 날짜들로 달력을 제한한다', async () => {
+    const dates = [new Date('2099-01-01T00:00:00')];
+    fetchDate.mockResolvedValueOnce(dates);
+    useReservations.mockReturnValue(query({ data: [] }));
+
+    render(<RoomPage />);
+
+    await waitFor(() =>
+      expect(mockDatePickerProps.mock.calls.at(-1)[0].includeDates).toBe(dates),
+    );
+    expect(
+      screen.getByText(/선택한 날짜에는 예약할 수 있는 방이 없습니다/),
+    ).toBeInTheDocument();
+  });
+
+  // 잠긴 달력에서 유일하게 통과하는 조작이 "입력칸 비우기" 인데 그 경로가 format(null) 로
+  // RangeError 를 던졌다.
+  it('날짜 입력을 비워도 예외 없이 넘어간다', () => {
+    useReservations.mockReturnValue(query());
+
+    render(<RoomPage />);
+    const { onChange } = mockDatePickerProps.mock.calls.at(-1)[0];
+
+    expect(() => onChange(null)).not.toThrow();
+  });
 });
 
 describe('RoomPage 시간 선택', () => {

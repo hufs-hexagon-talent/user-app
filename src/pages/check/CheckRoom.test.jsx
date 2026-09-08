@@ -1,5 +1,11 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { useMyInquiries } from '../../api/inquiry.api';
@@ -114,6 +120,32 @@ describe('예약 목록', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(query.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  // react-query v5 는 재조회가 실패해도 data 를 유지한다. 앱 복귀(refetchOnWindowFocus) 때
+  // 한 번 실패했다고 받아 둔 목록을 지우면 예약 취소·문의 경로가 통째로 사라진다.
+  test('재조회에 실패해도 받아 둔 목록은 남기고 위에 안내만 얹는다', () => {
+    const refetch = jest.fn();
+    useUserReservation.mockReturnValue({
+      ...loaded([reservation(7)]),
+      isError: true,
+      refetch,
+    });
+    renderCheck();
+
+    // 접근 이름은 다른 PR(fix/tap-targets)이 "… 예약 취소" 로 바꾼다. 어느 쪽이 먼저 들어와도 통과하게 둔다.
+    expect(
+      screen.getByRole('button', { name: /^삭제$|예약 취소$/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('예약 목록을 불러오지 못했습니다.'),
+    ).toBeNull();
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('최신 예약 목록을 못 받아왔습니다.');
+    fireEvent.click(
+      within(status).getByRole('button', { name: '다시 시도' }),
+    );
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   test('예약이 없으면 없음 문구를 보여준다', () => {

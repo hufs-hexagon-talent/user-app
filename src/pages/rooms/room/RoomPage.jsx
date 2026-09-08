@@ -91,8 +91,13 @@ const RoomPage = () => {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedRangeFrom, setSelectedRangeFrom] = useState(null);
   const [selectedRangeTo, selSelectedRangeTo] = useState(null);
-  // 조회 실패 시 null 로 두면 달력 제한이 풀려 학생이 날짜를 직접 고를 수 있다
-  const [availableDate, setAvailableDate] = useState([]);
+  // null 은 "달력 제한 없음". 응답 전·조회 실패·목록이 빈 경우 모두 null 로 둔다.
+  // 빈 배열을 그대로 includeDates 에 주면 react-datepicker 가 "허용 날짜 0개" 로 읽어
+  // 35칸이 전부 잠기고 월 이동 화살표까지 사라져 학생이 아무것도 할 수 없다.
+  const [availableDate, setAvailableDate] = useState(null);
+  // 서버가 200 + 빈 목록을 준 경우(방학처럼 운영 일정이 0건). 오류가 아니라 catch 를 안 탄다.
+  // 이때 "다른 날짜를 선택해 주세요" 는 지킬 수 없는 지시라 안내를 사실대로 바꾼다.
+  const [noAvailableDates, setNoAvailableDates] = useState(false);
   const [earliestStartTime, setEarliestStartTime] = useState(null);
   const [startHour, setStartHour] = useState(null);
   const [startMinute, setStartMinute] = useState(null);
@@ -130,10 +135,12 @@ const RoomPage = () => {
   });
   const { loggedIn: isLoggedIn } = useAuth();
 
-  const hasRooms =
-    !isReservationsPending &&
-    !isReservationsError &&
-    reservationsByRooms?.length > 0;
+  // 분기 순서: 표가 손에 있으면 isError 여도 표를 그린다 — react-query v5 는 재조회가 실패해도
+  // data 를 유지한다. 30초 폴링이나 앱 복귀 재조회가 한 번 실패했다고 표를 오류 카드로 바꾸면
+  // 모바일은 유일한 예약 버튼(SelectionBar)까지 사라진다(MyInquiries 의 hasList 와 같은 규칙).
+  const hasReservationData =
+    !isReservationsPending && Array.isArray(reservationsByRooms);
+  const hasRooms = hasReservationData && reservationsByRooms.length > 0;
 
   // 화면을 열어둔 채 시간이 지나면 지난 칸이 저절로 잠기도록 현재 시각을 갱신한다
   const [now, setNow] = useState(() => new Date());
@@ -223,6 +230,8 @@ const RoomPage = () => {
 
   // date-picker에서 날짜 선택할 때마다 실행되는 함수
   const handleDateChange = date => {
+    // 입력칸을 비우면 onChange(null) 이 온다. format(null) 은 RangeError 를 던진다.
+    if (!date) return;
     const formattedDate = format(date, 'yyyy-MM-dd');
     // date picker에서 선택한 날짜 저장
     setSelectedDate(formattedDate);
@@ -464,7 +473,9 @@ const RoomPage = () => {
     const getDate = async () => {
       try {
         const dates = await fetchDate(departmentId);
-        setAvailableDate(dates);
+        const hasDates = Array.isArray(dates) && dates.length > 0;
+        setAvailableDate(hasDates ? dates : null);
+        setNoAvailableDates(!hasDates);
       } catch {
         // 목록이 비어 있으면 달력의 모든 날짜가 잠기므로 제한을 풀고 안내한다
         setAvailableDate(null);
@@ -507,6 +518,9 @@ const RoomPage = () => {
                 locale={ko}
                 minDate={today}
                 includeDates={availableDate}
+                // 허용 날짜가 이번 달에 없어도 화살표는 남긴다(비활성 표시). 화살표까지 사라지면
+                // 고장 난 화면으로 보인다.
+                showDisabledMonthNavigation
                 onChange={handleDateChange}
                 dateFormat="yyyy년 MM월 dd일"
                 showIcon
@@ -514,6 +528,23 @@ const RoomPage = () => {
             </div>
           </div>
         </div>
+        {hasRooms && isReservationsError && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mx-8 md:mx-12 lg:mx-96 mb-2 flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
+            <span>
+              최신 예약 현황을 못 받아왔습니다. 표시된 내용이 실제와 다를 수
+              있습니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => refetchReservations()}
+              className="inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline">
+              다시 시도
+            </button>
+          </div>
+        )}
         {hasRooms && <TimeTableLegend />}
         {/* timeTable 시작 */}
         {isReservationsPending && (
@@ -521,7 +552,7 @@ const RoomPage = () => {
             예약 현황을 불러오는 중입니다.
           </div>
         )}
-        {!isReservationsPending && isReservationsError && (
+        {!isReservationsPending && !hasReservationData && isReservationsError && (
           <div className="text-center mx-8 md:mx-12 lg:mx-96 py-12 my-12 rounded-lg bg-gray-100 text-gray-900">
             예약 현황을 불러오지 못했습니다.
             <div className="mt-4 flex justify-center">
@@ -546,10 +577,19 @@ const RoomPage = () => {
             />
           </div>
         )}
-        {!isReservationsPending && !isReservationsError && !hasRooms && (
+        {hasReservationData && !hasRooms && (
           <div className="text-center mx-8 md:mx-12 lg:mx-96 py-12 my-12 rounded-lg bg-gray-100 text-gray-900">
-            선택한 날짜에는 예약할 수 있는 방이 없습니다. <br />
-            다른 날짜를 선택해 주세요.
+            {noAvailableDates ? (
+              <>
+                지금은 예약할 수 있는 날짜가 없습니다. <br />
+                운영 일정이 등록되면 예약할 수 있습니다.
+              </>
+            ) : (
+              <>
+                선택한 날짜에는 예약할 수 있는 방이 없습니다. <br />
+                다른 날짜를 선택해 주세요.
+              </>
+            )}
           </div>
         )}
         {hasRooms && (
