@@ -13,10 +13,26 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '../../components/accordion/Accordion';
+import { useCustomSnackbars } from '../../components/snackbar/SnackBar';
+import useAuth from '../../hooks/useAuth';
 import HomeScreenGuide from './HomeScreenGuide';
 
 const Notice = () => {
   const navigate = useNavigate();
+  const { loggedIn } = useAuth();
+  const { openErrorSnackbar } = useCustomSnackbars();
+
+  // 이 화면은 비로그인에서도 열린다(푸터의 이용 규칙). 세 버튼의 목적지는 로그인 라우트에만
+  // 있어서 비로그인이면 캐치올이 안내 없이 홈으로 바꿔치기했다. 버튼은 남기고, 비로그인이면
+  // 안내와 함께 로그인 화면으로 보낸다(RoomPage 의 예약 시도와 같은 규칙).
+  const goIfLoggedIn = path => {
+    if (!loggedIn) {
+      openErrorSnackbar('로그인 후 이용할 수 있습니다.', 2500);
+      navigate('/login');
+      return;
+    }
+    navigate(path);
+  };
 
   return (
     <div className="px-8 break-keep">
@@ -45,11 +61,11 @@ const Notice = () => {
                   없도록 제한됩니다. 본인의 예약 및 노쇼 현황은{' '}
                   <button
                     type="button"
-                    onClick={() => navigate('/check')}
+                    onClick={() => goIfLoggedIn('/check')}
                     className="underline underline-offset-2">
                     내 신청 현황
                   </button>
-                  에서 확인할 수 있습니다.
+                  (로그인 후)에서 확인할 수 있습니다.
                 </p>
               </div>
             </AccordionContent>
@@ -91,7 +107,7 @@ const Notice = () => {
                   로그인 후{' '}
                   <button
                     type="button"
-                    onClick={() => navigate('/password')}
+                    onClick={() => goIfLoggedIn('/password')}
                     className="underline underline-offset-2">
                     비밀번호 변경
                   </button>{' '}
@@ -110,7 +126,7 @@ const Notice = () => {
                   * 사용 관련 문의·건의 :{' '}
                   <button
                     type="button"
-                    onClick={() => navigate('/inquiry/new')}
+                    onClick={() => goIfLoggedIn('/inquiry/new')}
                     className="underline underline-offset-2">
                     문의하기
                   </button>
