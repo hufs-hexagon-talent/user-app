@@ -194,7 +194,7 @@ describe('예약 취소', () => {
     useUserReservation.mockReturnValue(loaded([reservation(7)]));
     renderCheck();
 
-    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: /예약 취소$/ }));
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
 
     await waitFor(() =>
@@ -221,7 +221,7 @@ describe('예약 취소', () => {
     useUserReservation.mockReturnValue(loaded([reservation(7)]));
     renderCheck();
 
-    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: /예약 취소$/ }));
     fireEvent.click(screen.getByRole('button', { name: '확인' }));
 
     await waitFor(() =>
@@ -238,7 +238,7 @@ describe('예약 취소', () => {
     useUserReservation.mockReturnValue(loaded([reservation(7)]));
     renderCheck();
 
-    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: /예약 취소$/ }));
     const confirm = screen.getByRole('button', { name: '확인' });
     expect(confirm).toBeDisabled();
 
@@ -384,7 +384,7 @@ describe('출석 문의 진입점', () => {
         '/inquiry/new?category=ATTENDANCE&reservationId=',
       ),
     );
-    expect(screen.getAllByRole('button', { name: '삭제' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /예약 취소$/ })).toHaveLength(1);
     expect(screen.getByText('이용 중')).toBeVisible();
     expect(screen.getByText('예약 예정')).toBeVisible();
     expect(screen.getByText('미출석')).toBeVisible();
@@ -405,6 +405,20 @@ describe('출석 문의 진입점', () => {
     );
     expect(link).toHaveTextContent('문의');
     expect(link).toHaveClass('min-h-[44px]');
+  });
+
+  // 앱에서 예약을 취소하는 유일한 경로다. 글자 높이(20px)만큼만 눌리던 것을 문의 링크와 같은
+  // 44px 로 맞추고, 표의 여러 행이 전부 "삭제" 로 읽히지 않게 시각·호실을 접근 이름에 넣는다.
+  test('삭제 버튼은 44px 탭 영역과 시각·호실이 든 접근 이름을 갖는다', () => {
+    useUserReservation.mockReturnValue(loaded([reservation(7)]));
+    renderCheck();
+
+    const button = screen.getByRole('button', {
+      name: /세미나실-1 예약 취소$/,
+    });
+    expect(button).toHaveTextContent('삭제');
+    expect(button).toHaveClass('min-h-[44px]');
+    expect(button).not.toHaveClass('dark:text-cyan-500');
   });
 
   // 같은 예약을 표와 팝오버에서 두세 번 접수하는 학생이 있었다. 이미 문의했으면 그 문의로 보낸다.

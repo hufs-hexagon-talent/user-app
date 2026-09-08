@@ -346,7 +346,7 @@ const FetchState = () => {
                   <Table.Cell>
                     <a
                       onClick={() => handleUnblocked(user.userId)}
-                      className="font-medium text-red-600 cursor-pointer hover:underline dark:text-cyan-500">
+                      className="font-medium text-red-600 cursor-pointer hover:underline">
                       삭제
                     </a>
                   </Table.Cell>
