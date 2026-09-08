@@ -48,10 +48,11 @@ export const CONTENT_PLACEHOLDERS = {
 // Tailwind 는 소스를 정적으로 스캔한다 — 클래스 문자열은 조립하지 않고 완결된 리터럴로 둔다.
 const fieldClass =
   'w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
+// 제출·예약 선택은 가장 많이 눌리는 버튼인데 py-2 + text-sm 이라 36/38px 이었다. 44px 로 맞춘다.
 const primaryButtonClass =
-  'w-full rounded-md bg-[#002D56] px-4 py-2 text-sm text-white disabled:opacity-50 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
+  'min-h-[44px] w-full rounded-md bg-[#002D56] px-4 py-2 text-sm text-white disabled:opacity-50 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
 const outlineButtonClass =
-  'rounded-md border border-[#002D56] bg-white px-4 py-2 text-sm font-semibold text-[#002D56] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
+  'min-h-[44px] rounded-md border border-[#002D56] bg-white px-4 py-2 text-sm font-semibold text-[#002D56] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
 // 글자만 있는 보조 버튼이라 높이가 ~20px 이었다. 모달 카드와 같은 44px 탭 영역을 준다.
 const linkButtonClass =
   'inline-flex min-h-[44px] items-center px-2 text-sm text-[#002D56] hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';

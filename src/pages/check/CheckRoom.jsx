@@ -253,7 +253,11 @@ const Check = () => {
                               onClick={() => {
                                 setOpenModal(reservation.reservationId);
                               }}
-                              className="font-medium text-red-600 hover:underline dark:text-cyan-500">
+                              // 앱에서 예약을 취소하는 유일한 경로. 글자 높이(20px)만 눌리던 것을
+                              // 같은 자리의 문의 링크와 같은 44px 로 맞춘다. 접근 이름에 시각·호실을
+                              // 넣어 여러 행이 전부 "삭제" 로 읽히지 않게 한다.
+                              aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 예약 취소`}
+                              className="inline-flex min-h-[44px] items-center px-2 font-medium text-red-600 hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]">
                               삭제
                             </button>
                           )}
