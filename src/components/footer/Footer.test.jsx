@@ -5,15 +5,13 @@ import { RecoilRoot } from 'recoil';
 import Footer from './Footer';
 import { authState } from '../../hooks/authState';
 
-// user.api 를 통째로 목킹하면 useServiceRole 이 내부에서 useMe() 를 부르지 않으므로
-// QueryClientProvider 가 필요 없다. useAuth 가 useRecoilState 를 쓰므로 RecoilRoot 는
-// 바깥에 있어야 하고, 이동은 useNavigate 호출로 확인한다.
+// 지금 Footer 는 로그인 여부도 역할도 보지 않는다. 그래도 목과 RecoilRoot 를 남겨
+// 두는 이유는, 누가 다시 역할이나 로그인으로 푸터를 감쌌을 때 아래 테스트들이 그걸
+// 잡아야 해서다. user.api 를 통째로 목킹하면 useServiceRole 이 내부에서 useMe() 를
+// 부르지 않아 QueryClientProvider 가 필요 없다. 이동은 useNavigate 호출로 확인한다.
 const mockRole = jest.fn();
 jest.mock('../../api/user.api', () => ({
   useServiceRole: () => ({ data: mockRole() }),
-}));
-jest.mock('react-simple-snackbar', () => ({
-  useSnackbar: () => [jest.fn(), jest.fn()],
 }));
 
 const mockNavigate = jest.fn();
@@ -62,8 +60,7 @@ describe('Footer 이용 규칙 링크', () => {
     ).toBeInTheDocument();
   });
 
-  // 키보드로 누를 수 있어야 한다. 아래 관리자 항목처럼 div + onClick 이면
-  // 탭으로 닿지 않는다.
+  // 키보드로 누를 수 있어야 한다. div + onClick 이면 탭으로 닿지 않는다.
   it('버튼이라 탭으로 닿는다', () => {
     renderFooter({ loggedIn: false });
 
@@ -80,17 +77,17 @@ describe('Footer 이용 규칙 링크', () => {
   });
 });
 
+/*
+ * 관리자는 /admin 으로 바로 들어온다. 학생 앱을 한 번 거쳐 들어오던 이 입구는
+ * 새 어드민 사이드바의 '구 관리자 화면' 으로 옮겼다. 여기에 되살리면 관리자가
+ * 학생 화면을 지나야 관리 화면에 닿는 길이 다시 생긴다.
+ */
 describe('Footer 관리자 링크', () => {
-  it('관리자에게만 보인다', () => {
-    renderFooter({ loggedIn: true, role: 'ADMIN' });
-
-    expect(screen.getByText('관리자')).toBeInTheDocument();
-  });
-
   it.each([
+    ['관리자', { loggedIn: true, role: 'ADMIN' }],
     ['일반 사용자', { loggedIn: true, role: 'USER' }],
     ['비로그인 방문자', { loggedIn: false }],
-  ])('%s 에게는 보이지 않는다', (_label, options) => {
+  ])('%s 에게 관리자 진입점을 두지 않는다', (_label, options) => {
     renderFooter(options);
 
     expect(screen.queryByText('관리자')).toBeNull();
