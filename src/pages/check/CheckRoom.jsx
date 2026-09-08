@@ -130,8 +130,11 @@ const Check = () => {
   );
 
   // 조회 실패를 빈 목록으로 오인하지 않도록 로딩·실패·없음을 따로 보여준다.
-  const isReservationsLoaded = !isReservationsPending && !isReservationsError;
-  const hasReservations = isReservationsLoaded && reservations?.length > 0;
+  // 목록이 손에 있으면 isError 여도 목록을 그린다 — react-query v5 는 재조회가 실패해도 data 를
+  // 유지한다. 앱 복귀 재조회가 한 번 실패했다고 예약 취소·문의 경로를 지우지 않는다(RoomPage 와 같은 규칙).
+  const isReservationsLoaded =
+    !isReservationsPending && Array.isArray(reservations);
+  const hasReservations = isReservationsLoaded && reservations.length > 0;
 
   // 문제를 보고 있는 화면에서 바로 이의를 시작하게 한다 — 폼이 예약을 확정한 채로 열린다.
   const actionLinkClass =
@@ -160,6 +163,20 @@ const Check = () => {
       <div className="flex justify-center text-2xl mt-20">
         {me?.name}님의 신청 현황
       </div>
+      {hasReservations && isReservationsError && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mx-4 mt-10 -mb-6 flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
+          <span>최신 예약 목록을 못 받아왔습니다. 표시된 내용이 실제와 다를 수 있습니다.</span>
+          <button
+            type="button"
+            onClick={() => refetchReservations()}
+            className="inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline">
+            다시 시도
+          </button>
+        </div>
+      )}
       <div id="table" className="overflow-x-auto mt-10">
         <Table className="border">
           <Table.Head
@@ -182,7 +199,9 @@ const Check = () => {
                 </Table.Cell>
               </Table.Row>
             )}
-            {!isReservationsPending && isReservationsError && (
+            {!isReservationsPending &&
+              !isReservationsLoaded &&
+              isReservationsError && (
               <Table.Row className="bg-white text-center text-gray-900">
                 <Table.Cell colSpan={6} className="px-2 py-8">
                   예약 목록을 불러오지 못했습니다.
