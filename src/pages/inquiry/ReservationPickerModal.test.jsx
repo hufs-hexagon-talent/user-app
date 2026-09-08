@@ -386,6 +386,16 @@ describe('ReservationPickerModal 상태', () => {
     expect(props.refetch).toHaveBeenCalledTimes(1);
   });
 
+  // 모달은 열릴 때마다 재조회하므로 이 배너는 문의 상세보다 자주 뜬다. 진행 중에는 잠근다.
+  it('배너의 다시 시도는 재조회 중에 잠기고 진행 중으로 표시된다', () => {
+    renderPicker({ isError: true, isFetching: true });
+
+    expect(cardButtons()).toHaveLength(4);
+    expect(
+      screen.getByRole('button', { name: '다시 불러오는 중' }),
+    ).toBeDisabled();
+  });
+
   it('예약이 없으면 빈 상태 안내를, 출석 유형이면 기타로 바꾸라는 힌트를 함께 보여준다', () => {
     const { unmount } = renderPicker({ reservations: [] });
     expect(screen.getByText(PICKER_EMPTY_MESSAGE)).toBeInTheDocument();

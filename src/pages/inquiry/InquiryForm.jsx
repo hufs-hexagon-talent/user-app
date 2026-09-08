@@ -97,6 +97,8 @@ const InquiryForm = () => {
     data: reservations,
     isPending: isReservationsPending,
     isError: isReservationsError,
+    isFetching: isReservationsFetching,
+    isPaused: isReservationsPaused,
     refetch: refetchReservations,
   } = useUserReservation();
   const { mutateAsync: createInquiry, isPending: isCreating } =
@@ -659,6 +661,8 @@ const InquiryForm = () => {
         reservations={reservations}
         isPending={isReservationsPending}
         isError={isReservationsError}
+        isFetching={isReservationsFetching}
+        isPaused={isReservationsPaused}
         refetch={refetchReservations}
       />
     </div>

@@ -266,6 +266,16 @@ describe('InquiryDetail', () => {
   });
 
   // react-query v5 는 재조회가 실패해도 data 를 유지한다. 손에 쥔 답변을 오류 문구로 덮지 않는다.
+  it('배너의 다시 시도는 재조회 중에 잠기고 진행 중으로 표시된다', () => {
+    mockList([OPEN_INQUIRY], { isError: true, isFetching: true });
+    render(<InquiryDetail />);
+
+    expect(
+      screen.getByRole('button', { name: '다시 불러오는 중' }),
+    ).toBeDisabled();
+    expect(screen.getByText(OPEN_INQUIRY.content)).toBeInTheDocument();
+  });
+
   it('캐시가 있는 채로 재조회에 실패하면 배너만 얹고 내용을 지킨다', () => {
     const refetch = jest.fn();
     mockList([OPEN_INQUIRY], { isError: true, refetch });

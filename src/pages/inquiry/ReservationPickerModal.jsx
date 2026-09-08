@@ -3,6 +3,7 @@ import { Modal } from 'flowbite-react';
 
 import { modalTheme } from '../../components/modal/modalTheme';
 
+import { retryState } from './inquiryView';
 import ReservationCard from './ReservationCard';
 import {
   formatReservationTime,
@@ -49,9 +50,13 @@ const ReservationPickerModal = ({
   reservations,
   isPending,
   isError,
+  isFetching = false,
+  isPaused = false,
   refetch,
   category,
 }) => {
+  // 모달은 열릴 때마다 재조회하므로 이 배너는 목록·상세보다 자주 뜬다. 진행 중에는 잠근다.
+  const retry = retryState({ isFetching, isPaused });
   const dialogRef = useRef(null);
   const [limit, setLimit] = useState(INITIAL_LIMIT);
   // "더 보기" 는 마지막 클릭에서 자기 자신을 언마운트한다(hiddenCount 가 0 이 된다). 그대로 두면
@@ -163,8 +168,9 @@ const ReservationPickerModal = ({
             <button
               type="button"
               onClick={() => refetch()}
+              disabled={retry.disabled}
               className="inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline">
-              다시 시도
+              {retry.label}
             </button>
           </div>
         )}
