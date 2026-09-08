@@ -99,12 +99,17 @@ describe('MyInquiries', () => {
     ).toBeInTheDocument();
     expect(within(openItem()).getByText('답변 대기')).toBeInTheDocument();
     expect(
-      within(openItem()).getByText('2026-09-01 10:00'),
+      within(openItem()).getByText('접수 2026-09-01 10:00'),
     ).toBeInTheDocument();
     expect(
       within(resolvedItem()).getByText('출석·예약 이의'),
     ).toBeInTheDocument();
     expect(within(resolvedItem()).getByText('답변 완료')).toBeInTheDocument();
+    // 답변 완료 구획은 답변 시각으로 정렬한다. 행에도 같은 값을 라벨과 함께 찍어야
+    // 학생이 접수일을 답변일로 읽지 않는다.
+    expect(
+      within(resolvedItem()).getByText('답변 2026-08-30 11:40'),
+    ).toBeInTheDocument();
   });
 
   // 목록은 훑는 화면이다. 622자짜리 문의 한 건이 화면을 통째로 먹으면 새 답변이 안 보인다.
@@ -117,12 +122,19 @@ describe('MyInquiries', () => {
   });
 
   // 클램프는 눈에만 걸린다. 접근 이름에 본문을 실으면 400자가 그대로 읽힌다.
-  it('행의 접근 이름은 유형·상태·접수 일시로 짧게 준다', () => {
+  // aria-label 이 안쪽 텍스트를 덮으므로 보이는 시각을 바꾸면 여기도 같이 바꿔야 한다.
+  // "답변 완료 답변 …" 처럼 같은 말이 겹치지 않게 접근 이름은 "답변일/접수일" 로 읽힌다.
+  it('행의 접근 이름은 유형·상태·일시로 짧게 주고 보이는 시각과 같은 값을 읽는다', () => {
     render(<MyInquiries />);
 
     expect(
       screen.getByRole('button', {
-        name: '출석·예약 이의 답변 완료 2026-08-30 09:00 문의 보기',
+        name: '출석·예약 이의 답변 완료 답변일 2026-08-30 11:40 문의 보기',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: '시설·키오스크 고장 답변 대기 접수일 2026-09-01 10:00 문의 보기',
       }),
     ).toBeInTheDocument();
   });
@@ -186,12 +198,12 @@ describe('MyInquiries', () => {
 
     expect(
       screen.getByRole('button', {
-        name: '시설·키오스크 고장 답변 대기 이전 답변 2026-09-01 10:00 문의 보기',
+        name: '시설·키오스크 고장 답변 대기 이전 답변 접수일 2026-09-01 10:00 문의 보기',
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: '출석·예약 이의 답변 완료 2026-08-30 09:00 문의 보기',
+        name: '출석·예약 이의 답변 완료 답변일 2026-08-30 11:40 문의 보기',
       }),
     ).toBeInTheDocument();
   });
@@ -301,6 +313,26 @@ describe('MyInquiries', () => {
     expect(screen.queryByText('문의 목록을 불러오지 못했습니다.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  // 다시 시도를 눌러도 화면이 안 바뀌면 고장으로 보고 연타한다. 진행 중에는 잠그고 알린다.
+  it('배너의 다시 시도는 재조회 중에 잠기고 진행 중으로 표시된다', () => {
+    mockList([OPEN_INQUIRY], { isError: true, isFetching: true });
+    render(<MyInquiries />);
+
+    expect(
+      screen.getByRole('button', { name: '다시 불러오는 중' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(STALE_MESSAGE);
+  });
+
+  it('오프라인이라 요청이 나가지 않으면 연결 대기로 표시한다', () => {
+    mockList([OPEN_INQUIRY], { isError: true, isPaused: true });
+    render(<MyInquiries />);
+
+    expect(
+      screen.getByRole('button', { name: '연결을 기다리는 중' }),
+    ).toBeDisabled();
   });
 
   it('불러오는 중에도 문의하기 버튼이 있다', () => {

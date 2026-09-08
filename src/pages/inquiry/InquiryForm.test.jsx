@@ -228,6 +228,21 @@ describe('InquiryForm 유형 선택', () => {
     });
   });
 
+  // 폼이 isFetching 을 내리지 않으면 모달의 다시 시도가 진행 중을 표시하지 못한다.
+  it('재조회 중에 연 예약 선택 모달의 다시 시도는 잠겨 있다', () => {
+    mockSearchParamsValue = new URLSearchParams('category=ATTENDANCE');
+    mockReservations({ isError: true, isFetching: true });
+    render(<InquiryForm />);
+
+    openPicker();
+
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: '다시 불러오는 중',
+      }),
+    ).toBeDisabled();
+  });
+
   it('유형마다 내용 칸의 안내 문구가 다르다', () => {
     render(<InquiryForm />);
     chooseCategory('기타');

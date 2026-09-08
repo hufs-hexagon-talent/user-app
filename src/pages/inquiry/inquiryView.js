@@ -42,8 +42,27 @@ export const metaLabel = inquiry => {
   return reservationMeta(inquiry);
 };
 
+// 행에 찍는 시각과 정렬 키는 같은 값이어야 목록이 뒤죽박죽으로 보이지 않는다. 답변 완료 구획은
+// 답변 시각으로 정렬하는데 행에는 접수 시각만 찍혀 있어, 8/1 접수 건에 오늘 답이 오면 맨 위에
+// 오면서 날짜는 8/1 로 보였다. 라벨 없이 찍으면 접수일을 답변일로 읽는다(admin-app 의 rowDate 와
+// 같은 규칙. 라벨이 '처리' 가 아니라 '답변' 인 것은 학생이 기다리는 게 답변이기 때문이다).
+export const rowDate = inquiry =>
+  inquiry.status === 'RESOLVED' && inquiry.resolvedAt
+    ? { label: '답변', at: inquiry.resolvedAt }
+    : { label: '접수', at: inquiry.createAt };
+
 // 답변 완료는 답변한 순서로 — 새 답변이 맨 위. 서버는 접수일 내림차순만 준다.
-const answeredAt = inquiry => new Date(inquiry.resolvedAt ?? inquiry.createAt);
+const answeredAt = inquiry => new Date(rowDate(inquiry).at);
+
+// stale 배너의 다시 시도 버튼 상태. 눌러도 화면이 안 바뀌면 고장으로 보고 연타하는데, 연타는
+// 진행 중인 재시도 체인을 취소하고 처음부터 다시 돌려(최악 67초) 체감을 더 나쁘게 한다. 진행 중에는
+// 잠그고 라벨로 알린다. 오프라인이면 요청이 나가지도 않으므로(react-query paused) 그것도 알린다.
+// 배너 문구 자체는 바꾸지 않는다 — role="status" 영역이라 바꿀 때마다 다시 읽힌다.
+export const retryState = ({ isFetching = false, isPaused = false } = {}) => {
+  if (isPaused) return { label: '연결을 기다리는 중', disabled: true };
+  if (isFetching) return { label: '다시 불러오는 중', disabled: true };
+  return { label: '다시 시도', disabled: false };
+};
 
 export const sortResolvedLatestFirst = list =>
   [...list].sort((a, b) => answeredAt(b) - answeredAt(a));

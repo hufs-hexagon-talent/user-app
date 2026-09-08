@@ -10,6 +10,8 @@ import { CATEGORY_LABELS, STATUS_LABELS } from './inquiryLabels';
 import {
   hasAnswer,
   metaLabel,
+  retryState,
+  rowDate,
   sortResolvedLatestFirst,
   STALE_MESSAGE,
 } from './inquiryView';
@@ -25,7 +27,15 @@ const formatAt = value => format(new Date(value), 'yyyy-MM-dd HH:mm');
 
 const MyInquiries = () => {
   const navigate = useNavigate();
-  const { data: inquiries, isPending, isError, refetch } = useMyInquiries();
+  const {
+    data: inquiries,
+    isPending,
+    isError,
+    isFetching,
+    isPaused,
+    refetch,
+  } = useMyInquiries();
+  const retry = retryState({ isFetching, isPaused });
 
   // 분기 순서: 목록이 손에 있으면 isError 여도 목록을 그린다 — react-query v5 는 재조회가
   // 실패해도 data 를 유지하므로, 오류를 먼저 보면 이미 받은 답변을 화면에서 지우게 된다.
@@ -45,7 +55,9 @@ const MyInquiries = () => {
     // 배지가 이미 "답변 완료" 를 말한다. 표시가 필요한 곳은 재오픈뿐이다 — 거기서만
     // 배지(답변 대기)와 실제 상태(답변 있음)가 어긋난다.
     const showAnswerChip = !isResolved && hasAnswer(inquiry);
-    const createdAt = formatAt(inquiry.createAt);
+    // 답변 완료는 답변 시각, 그 외는 접수 시각 — 정렬 키와 같은 값을 라벨과 함께 찍는다.
+    const { label: dateLabel, at } = rowDate(inquiry);
+    const rowAt = formatAt(at);
 
     return (
       <li key={inquiry.inquiryId}>
@@ -57,7 +69,7 @@ const MyInquiries = () => {
           onClick={() => navigate(`/inquiry/${inquiry.inquiryId}`)}
           aria-label={`${CATEGORY_LABELS[inquiry.category]} ${
             STATUS_LABELS[inquiry.status]
-          }${showAnswerChip ? ' 이전 답변' : ''} ${createdAt} 문의 보기`}
+          }${showAnswerChip ? ' 이전 답변' : ''} ${dateLabel}일 ${rowAt} 문의 보기`}
           className={rowClass}>
           {/* flex 아이템의 기본 min-width: auto 는 콘텐츠 최소 크기보다 작아지지 않는다.
               0 으로 내려야 긴 본문이 행을 오른쪽으로 늘리지 않는다. */}
@@ -80,7 +92,7 @@ const MyInquiries = () => {
                 </span>
               )}
               <span className="ml-auto text-xs text-gray-500 whitespace-nowrap">
-                {createdAt}
+                {dateLabel} {rowAt}
               </span>
             </span>
             {meta && (
@@ -143,8 +155,9 @@ const MyInquiries = () => {
           <button
             type="button"
             onClick={() => refetch()}
+            disabled={retry.disabled}
             className={retryLinkClass}>
-            다시 시도
+            {retry.label}
           </button>
         </div>
       )}

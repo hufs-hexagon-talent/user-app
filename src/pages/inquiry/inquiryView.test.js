@@ -5,8 +5,59 @@ import {
   answerTitle,
   hasAnswer,
   metaLabel,
+  retryState,
+  rowDate,
   sortResolvedLatestFirst,
 } from './inquiryView';
+
+// 정렬 키(resolvedAt)와 행에 찍는 시각이 다르면 답변 완료 구획이 뒤죽박죽으로 보인다.
+// 8/1 접수 건에 오늘 답이 오면 맨 위에 오는데 날짜는 8/1 로 보였다.
+describe('rowDate', () => {
+  it('답변 완료는 답변 시각을, 그 외는 접수 시각을 라벨과 함께 준다', () => {
+    expect(
+      rowDate({
+        status: 'RESOLVED',
+        resolvedAt: '2026-08-30T11:40:00',
+        createAt: '2026-08-01T10:00:00',
+      }),
+    ).toEqual({ label: '답변', at: '2026-08-30T11:40:00' });
+    expect(
+      rowDate({ status: 'OPEN', resolvedAt: null, createAt: '2026-09-01T10:00:00' }),
+    ).toEqual({ label: '접수', at: '2026-09-01T10:00:00' });
+  });
+
+  it('답변 시각이 없는 답변 완료는 접수 시각으로 대신한다', () => {
+    expect(
+      rowDate({ status: 'RESOLVED', resolvedAt: null, createAt: '2026-08-01T10:00:00' }),
+    ).toEqual({ label: '접수', at: '2026-08-01T10:00:00' });
+  });
+});
+
+// 다시 시도를 눌러도 화면이 안 바뀌면 고장으로 보고 연타한다. 연타는 재시도 체인을 처음부터
+// 다시 돌려(최악 67초) 체감을 더 나쁘게 한다. 진행 중과 오프라인(paused)을 라벨로 알린다.
+describe('retryState', () => {
+  it('재조회 중이면 잠그고 진행 중으로 표시한다', () => {
+    expect(retryState({ isFetching: true, isPaused: false })).toEqual({
+      label: '다시 불러오는 중',
+      disabled: true,
+    });
+  });
+
+  it('오프라인이라 요청이 나가지 않으면 연결 대기로 표시한다', () => {
+    expect(retryState({ isFetching: false, isPaused: true })).toEqual({
+      label: '연결을 기다리는 중',
+      disabled: true,
+    });
+  });
+
+  it('그 외에는 다시 시도다', () => {
+    expect(retryState({ isFetching: false, isPaused: false })).toEqual({
+      label: '다시 시도',
+      disabled: false,
+    });
+    expect(retryState({})).toEqual({ label: '다시 시도', disabled: false });
+  });
+});
 
 describe('metaLabel', () => {
   it('출석·기타 문의는 연결 예약 요약을 "예약 " 접두어로 준다', () => {
@@ -61,19 +112,23 @@ describe('metaLabel', () => {
 });
 
 describe('sortResolvedLatestFirst', () => {
+  // 답변 완료 구획만 이 정렬을 탄다. 정렬 키는 행에 찍는 시각(rowDate)과 같은 값이다.
   it('resolvedAt 내림차순, 없으면 createAt 으로 대신한다', () => {
     const a = {
       inquiryId: 1,
+      status: 'RESOLVED',
       createAt: '2026-08-01T00:00:00Z',
       resolvedAt: '2026-08-02T00:00:00Z',
     };
     const b = {
       inquiryId: 2,
+      status: 'RESOLVED',
       createAt: '2026-07-01T00:00:00Z',
       resolvedAt: '2026-09-01T00:00:00Z',
     };
     const c = {
       inquiryId: 3,
+      status: 'RESOLVED',
       createAt: '2026-08-15T00:00:00Z',
       resolvedAt: null,
     };

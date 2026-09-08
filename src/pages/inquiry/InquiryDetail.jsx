@@ -11,10 +11,11 @@ import { useCustomSnackbars } from '../../components/snackbar/SnackBar';
 import { inquiryErrorMessage } from './inquiryErrorMessage';
 import { CATEGORY_LABELS, STATUS_LABELS } from './inquiryLabels';
 import {
+  STALE_MESSAGE,
   answerTitle,
   hasAnswer,
   metaLabel,
-  STALE_MESSAGE,
+  retryState,
 } from './inquiryView';
 
 export const DETAIL_LOADING_MESSAGE = '문의를 불러오는 중입니다.';
@@ -26,7 +27,15 @@ const retryLinkClass =
 const InquiryDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { data: inquiries, isPending, isError, refetch } = useMyInquiries();
+  const {
+    data: inquiries,
+    isPending,
+    isError,
+    isFetching,
+    isPaused,
+    refetch,
+  } = useMyInquiries();
+  const retry = retryState({ isFetching, isPaused });
   const { mutateAsync: deleteInquiry, isPending: isDeleting } =
     useDeleteInquiry();
   const { openSuccessSnackbar, openErrorSnackbar } = useCustomSnackbars();
@@ -120,8 +129,9 @@ const InquiryDetail = () => {
           <button
             type="button"
             onClick={() => refetch()}
+            disabled={retry.disabled}
             className={retryLinkClass}>
-            다시 시도
+            {retry.label}
           </button>
         </div>
       )}
