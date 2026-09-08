@@ -49,13 +49,15 @@ const MyInquiries = () => {
 
     return (
       <li key={inquiry.inquiryId}>
-        {/* 클램프한 본문이 접근 이름에 그대로 실리면 400자가 읽힌다. 이름은 따로 준다. */}
+        {/* 클램프한 본문이 접근 이름에 그대로 실리면 400자가 읽힌다. 이름은 따로 준다.
+            대신 aria-label 이 안쪽 텍스트를 통째로 덮으므로, 눈에 보이는 표시를 늘리면
+            여기에도 같이 실어야 한다 — 안 그러면 스크린리더만 그 표시를 못 받는다. */}
         <button
           type="button"
           onClick={() => navigate(`/inquiry/${inquiry.inquiryId}`)}
           aria-label={`${CATEGORY_LABELS[inquiry.category]} ${
             STATUS_LABELS[inquiry.status]
-          } ${createdAt} 문의 보기`}
+          }${showAnswerChip ? ' 이전 답변' : ''} ${createdAt} 문의 보기`}
           className={rowClass}>
           {/* flex 아이템의 기본 min-width: auto 는 콘텐츠 최소 크기보다 작아지지 않는다.
               0 으로 내려야 긴 본문이 행을 오른쪽으로 늘리지 않는다. */}
@@ -84,7 +86,11 @@ const MyInquiries = () => {
             {meta && (
               <span className="mt-1 block text-xs text-gray-500">{meta}</span>
             )}
-            <span className="mt-1 block text-sm text-gray-800 line-clamp-2 break-words">
+            {/* block 을 같이 주면 안 된다. tailwind 는 .line-clamp-2{display:-webkit-box} 를
+                .block{display:block} 보다 먼저 내보내는데 명시도가 같아 뒤에 오는 block 이 이긴다
+                — 클램프가 통째로 죽어 본문 전문이 그려진다(실측: 200px vs 40px). -webkit-box
+                자체가 블록 레벨이라 block 은 애초에 필요 없다. */}
+            <span className="mt-1 text-sm text-gray-800 line-clamp-2 break-words">
               {inquiry.content}
             </span>
           </span>
