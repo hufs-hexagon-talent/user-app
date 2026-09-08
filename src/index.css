@@ -39,3 +39,28 @@
 body [class*='snackbar-wrapper'] {
   z-index: 60;
 }
+
+/* 토스트를 상단 네비 아래로 내리고, 토스트 자체는 탭이 통과하는 층으로 둔다.
+   라이브러리 기본은 top:8px + margin:8px 라 토스트 박스가 y 16~64 에 떠서 네비(y 0~62)와 겹쳤고,
+   본문·닫기 버튼이 pointer-events:auto 라 토스트가 떠 있는 1.5~5초 동안 모바일은 햄버거·로고가,
+   데스크톱은 우측 메뉴 링크가 눌리지 않았다(닫기 버튼이 정확히 로그인 링크 위에 온다).
+   - top: 네비 높이는 모바일 62px(햄버거 40 + py-2.5 + border 2), 데스크톱 58px 이라 큰 쪽에 맞춘다.
+     NavigationBar 의 브랜드 제목이 sm 미만에서 16px 인 것이 전제다(20px 이면 366px 미만에서 두 줄).
+   - pointer-events: 햄버거를 펼치면 메뉴가 네비 아래로 늘어나 첫 항목이 토스트와 겹친다. top 값으로는
+     못 피하므로 본문·닫기 버튼의 pointer-events:auto 를 끄고 닫기 버튼은 감춘다(눌리지 않는 X 는
+     거짓 어포던스). 토스트는 1.5~5초 뒤 스스로 사라지고 코드의 closeSnackbar 는 전부 프로그램
+     호출이라 잃는 동작이 없다.
+   - 하단 배치는 안 된다: 모바일 하단 SelectionBar(z-40)의 예약하기 버튼과 겹친다.
+   명시도 (0,1,1)·(0,2,1) 은 라이브러리의 (0,1,0) 을 주입 순서와 무관하게 이긴다. 여기서 쓰는 클래스
+   조각 셋(snackbar-wrapper-top, snackbar__text, snackbar__close)은 snackbarLayer.test.jsx 가 지킨다. */
+body [class*='snackbar-wrapper-top'] {
+  top: 62px;
+}
+
+body [class*='snackbar-wrapper'] [class*='snackbar__text'] {
+  pointer-events: none;
+}
+
+body [class*='snackbar-wrapper'] [class*='snackbar__close'] {
+  display: none;
+}

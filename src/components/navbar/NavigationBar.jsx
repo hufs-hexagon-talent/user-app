@@ -84,7 +84,10 @@ const NavigationBar = ({ locked = false }) => {
     <Navbar fluid rounded className="sticky top-0 z-30 border-b-2 bg-white">
       <Navbar.Brand as={locked ? 'div' : Link} to={locked ? undefined : '/'}>
         <img src={Logo} className="mr-3 h-6 sm:h-9" alt="cse logo" />
-        <span className="self-center whitespace-nowrap text-xl font-semibold dark:text-white">
+        {/* 20px 제목(약 309px) + 햄버거 40px 이 366px 미만 폭을 넘겨 햄버거가 둘째 줄로 떨어지고
+            상단 바가 62→90px 로 늘었다. sm(640px) 미만에서만 16px 로 줄인다. min-w-0·truncate 는
+            flex 줄바꿈 판정이 줄이기 전 폭으로 되므로 소용없고, 잘린 제목은 읽히지도 않는다. */}
+        <span className="self-center whitespace-nowrap text-base font-semibold sm:text-xl dark:text-white">
           컴퓨터공학부 세미나실 예약 시스템
         </span>
       </Navbar.Brand>
