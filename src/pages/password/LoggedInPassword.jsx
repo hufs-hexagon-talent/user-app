@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Label, TextInput } from 'flowbite-react';
 import { usePassword } from '../../api/user.api';
@@ -14,6 +14,9 @@ const LoggedInPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [newPasswordError, setNewPasswordError] = useState('');
+  const [changing, setChanging] = useState(false);
+  // 상태는 다음 렌더에서야 바뀐다. 같은 tick 의 두 번째 탭까지 막으려면 동기 값이어야 한다.
+  const changingRef = useRef(false);
 
   // 보기/가리기 토글 상태
   const [showOld, setShowOld] = useState(false);
@@ -50,13 +53,17 @@ const LoggedInPassword = () => {
 
     setNewPasswordError('');
     setPasswordError('');
+    // 더블탭하면 같은 기존 비밀번호로 두 번 나가고, 첫 요청이 성공한 뒤 두 번째가 USER-006 으로
+    // 실패해 성공 안내를 실패 안내로 덮는다. 학생은 변경이 실패한 줄 알고 옛 비밀번호로 다시
+    // 로그인한다. 래치는 검증을 통과한 뒤, 요청 직전에 건다(LoggedOutPassword 와 같은 순서).
+    if (changingRef.current) return;
+    changingRef.current = true;
+    setChanging(true);
     try {
       await changePw({ prePassword, newPassword });
-      openSuccessSnackbar(
-        '비밀번호가 성공적으로 변경되었습니다. 재로그인 부탁드립니다.',
-      );
 
-      // 서버 로그아웃(쿠키 만료)까지 끝낸 뒤 이동한다. 로그아웃 실패를
+      // 서버 로그아웃(쿠키 만료)까지 끝낸 뒤 안내하고 이동한다. 안내를 먼저 띄우면 로그아웃이
+      // 끝날 때까지(최대 5초) 성공 안내 옆에 버튼이 남는다. 로그아웃 실패를
       // 비밀번호 변경 실패로 오표시하지 않도록 여기서 따로 처리한다.
       try {
         await logout();
@@ -64,6 +71,10 @@ const LoggedInPassword = () => {
         console.error('Failed to logout after password change:', logoutError);
       }
 
+      openSuccessSnackbar(
+        '비밀번호가 성공적으로 변경되었습니다. 재로그인 부탁드립니다.',
+        2500,
+      );
       // 자동 리다이렉트 회피
       navigate('/login', { replace: true, state: { fromLogout: true } });
     } catch (error) {
@@ -72,6 +83,9 @@ const LoggedInPassword = () => {
         error?.message ?? '비밀번호 변경에 실패했습니다.',
         2500,
       );
+    } finally {
+      changingRef.current = false;
+      setChanging(false);
     }
   };
 
@@ -163,8 +177,12 @@ const LoggedInPassword = () => {
           </div>
         </div>
 
-        <Button className="mt-10 mb-10" color="dark" type="submit">
-          변경하기
+        <Button
+          className="mt-10 mb-10"
+          color="dark"
+          type="submit"
+          disabled={changing}>
+          {changing ? '변경 중...' : '변경하기'}
         </Button>
       </form>
     </div>
