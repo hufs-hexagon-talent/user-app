@@ -12,6 +12,7 @@ import Footer from './components/footer/Footer';
 import NavigationBar from './components/navbar/NavigationBar';
 import ConnectionError from './components/ConnectionError';
 import SessionExpiryWatcher from './components/SessionExpiryWatcher';
+import ScrollToTop from './components/ScrollToTop';
 
 import Check from './pages/check/CheckRoom';
 import LoginPage from './pages/login/LoginPage';
@@ -113,6 +114,7 @@ const RouterComponent = () => {
     return (
       <BrowserRouter basename={'/'}>
         <SessionExpiryWatcher />
+        <ScrollToTop />
         <div className="min-h-screen flex flex-col">
           <NavigationBar showSnackbar={openSnackbar} locked />
           <div className="flex-grow">
@@ -134,6 +136,7 @@ const RouterComponent = () => {
   return (
     <BrowserRouter basename={'/'}>
       <SessionExpiryWatcher />
+      <ScrollToTop />
       <div className="min-h-screen flex flex-col">
         <NavigationBar showSnackbar={openSnackbar} />
 

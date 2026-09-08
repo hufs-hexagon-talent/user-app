@@ -29,5 +29,24 @@ describe('스낵바 레이어', () => {
 
     const wrapper = container.querySelector("[class*='snackbar-wrapper']");
     expect(wrapper).not.toBeNull();
+    // 상단 배치 규칙(top: 62px)은 위치 조각까지 본다.
+    expect(wrapper.className).toMatch(/snackbar-wrapper-top/);
+  });
+
+  // index.css 는 본문의 pointer-events 를 끄고 닫기 버튼을 감춘다. 두 조각도 계약이다.
+  // jsdom 은 런타임 주입 CSS 를 계산하지 않으므로 여기서는 조각의 존재까지만 보장한다.
+  it('토스트 본문과 닫기 버튼 클래스에 snackbar__text·snackbar__close 조각이 들어 있다', () => {
+    const { container } = render(
+      <SnackbarProvider>
+        <Trigger />
+      </SnackbarProvider>,
+    );
+
+    expect(
+      container.querySelector("[class*='snackbar-wrapper'] [class*='snackbar__text']"),
+    ).toHaveTextContent('테스트 안내');
+    expect(
+      container.querySelector("[class*='snackbar-wrapper'] [class*='snackbar__close']"),
+    ).not.toBeNull();
   });
 });

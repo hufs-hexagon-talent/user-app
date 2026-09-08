@@ -57,6 +57,17 @@ describe('NavigationBar 고정', () => {
     // 불투명 배경이 없으면 스크롤 중 표 내용이 네비 뒤로 비친다.
     expect(nav).toHaveClass('bg-white');
   });
+
+  // jsdom 은 레이아웃이 없어 줄바꿈 자체는 못 잰다. 의도(좁은 폭에서만 작게)만 고정한다.
+  // 실제 폭은 헤드리스 브라우저로 320~430px 에서 한 줄임을 확인했다.
+  test('브랜드 제목은 sm 미만에서 16px, sm 이상에서 20px 이다', () => {
+    renderAs('STUDENT');
+    const title = screen.getByText('컴퓨터공학부 세미나실 예약 시스템');
+
+    expect(title).toHaveClass('text-base');
+    expect(title).toHaveClass('sm:text-xl');
+    expect(title).toHaveClass('whitespace-nowrap');
+  });
 });
 
 // 이용 규칙은 마이페이지 안으로 내려갔다. 마이페이지가 없는 사람들(비로그인·관리실 계정·
