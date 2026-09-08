@@ -88,13 +88,27 @@ describe('getOtpView', () => {
     ).toBe('loading');
   });
 
-  it('재조회에 실패하면 이전 QR 을 감추고 실패로 안내한다', () => {
-    expect(getOtpView({ ...base, isError: true })).toBe('error');
+  // 서버 OTP 유효 시간은 300초인데 재조회는 30초마다다. 재조회가 실패했다고 아직 4분 넘게
+  // 유효한 QR 을 감추면, 문 앞의 학생이 대면 출석에 쓸 수 있던 수단을 잃는다.
+  it('재조회에 실패해도 이전 QR 이 유효하면 그대로 보여 주되 stale 로 표시한다', () => {
+    expect(getOtpView({ ...base, isError: true })).toBe('stale');
   });
 
-  it('실패 뒤 다시 시도하는 동안은 불러오는 중이다', () => {
+  it('실패 뒤 다시 시도하는 동안에도 이전 QR 을 유지한다', () => {
     expect(getOtpView({ ...base, isError: true, isFetching: true })).toBe(
-      'loading',
+      'stale',
+    );
+  });
+
+  it('보여 줄 QR 이 없이 실패하면 실패로 안내한다', () => {
+    expect(getOtpView({ ...base, hasOtp: false, isError: true })).toBe(
+      'error',
+    );
+  });
+
+  it('실패한 채 유효 시간이 다 지나면 만료다', () => {
+    expect(getOtpView({ ...base, isError: true, isExpired: true })).toBe(
+      'expired',
     );
   });
 

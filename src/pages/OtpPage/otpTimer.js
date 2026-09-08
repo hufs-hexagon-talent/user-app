@@ -32,8 +32,11 @@ export const getRemainingSeconds = (
 export const isOtpExpired = (expiresAt, now) =>
   Number.isFinite(expiresAt) && now >= expiresAt;
 
-// 화면에 무엇을 보여줄지 정한다. 재조회 중이어도 이전 QR 이 유효하면 그대로 보여 주고,
-// 재조회에 실패했거나 정말 만료됐을 때만 QR 을 감춘다.
+// 화면에 무엇을 보여줄지 정한다. 이전 QR 이 유효하면(받은 뒤 300초 안) 재조회 중이든 실패했든
+// 그대로 보여 준다 — 서버 유효 시간이 재조회 주기(30초)보다 훨씬 길어 그 QR 로 출석이 된다.
+// 실패는 'stale' 로 구분해 화면이 "새 QR 을 못 받았다" 는 사실과 남은 시간을 함께 알린다.
+// QR 을 감추는 것은 보여 줄 값이 없거나 정말 만료됐을 때뿐이다. 문 앞의 학생이 대면 출석에
+// 쓸 수 있는 수단을 재조회 실패 한 번으로 잃지 않게 한다.
 export const getOtpView = ({
   hasOtp,
   isPending,
@@ -41,8 +44,13 @@ export const getOtpView = ({
   isError,
   isExpired,
 }) => {
-  if (hasOtp && !isError && !isExpired) return 'ready';
+  if (hasOtp && !isExpired) return isError ? 'stale' : 'ready';
   if (isPending || isFetching) return 'loading';
+  if (hasOtp && isExpired) return 'expired';
   if (isError) return 'error';
   return 'expired';
 };
+
+// stale 안내에 쓰는 남은 유효 시간(분, 내림). 초 단위로 흔들리면 읽기 어렵다.
+export const getRemainingValidMinutes = (dataUpdatedAt, now) =>
+  Math.max(0, Math.floor((dataUpdatedAt + OTP_TTL_MS - now) / 60000));
