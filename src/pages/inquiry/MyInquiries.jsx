@@ -12,6 +12,7 @@ import {
   metaLabel,
   retryState,
   rowDate,
+  rowMeta,
   sortResolvedLatestFirst,
   STALE_MESSAGE,
 } from './inquiryView';
@@ -21,7 +22,7 @@ const newInquiryButtonClass =
 const retryLinkClass =
   'inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline';
 const rowClass =
-  'flex w-full min-h-[44px] items-center gap-3 rounded-md border p-4 text-left break-keep hover:bg-gray-50 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
+  'flex w-full min-h-[44px] items-center gap-3 rounded-md border p-3 text-left break-keep hover:bg-gray-50 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56] sm:p-4';
 
 const formatAt = value => format(new Date(value), 'yyyy-MM-dd HH:mm');
 
@@ -52,6 +53,8 @@ const MyInquiries = () => {
   const renderRow = inquiry => {
     const isResolved = inquiry.status === 'RESOLVED';
     const meta = metaLabel(inquiry);
+    const metaParts = rowMeta(inquiry);
+    const metaId = `inquiry-meta-${inquiry.inquiryId}`;
     // 배지가 이미 "답변 완료" 를 말한다. 표시가 필요한 곳은 재오픈뿐이다 — 거기서만
     // 배지(답변 대기)와 실제 상태(답변 있음)가 어긋난다.
     const showAnswerChip = !isResolved && hasAnswer(inquiry);
@@ -70,39 +73,89 @@ const MyInquiries = () => {
           aria-label={`${CATEGORY_LABELS[inquiry.category]} ${
             STATUS_LABELS[inquiry.status]
           }${showAnswerChip ? ' 이전 답변' : ''} ${dateLabel}일 ${rowAt} 문의 보기`}
+          aria-describedby={meta ? metaId : undefined}
           className={rowClass}>
           {/* flex 아이템의 기본 min-width: auto 는 콘텐츠 최소 크기보다 작아지지 않는다.
               0 으로 내려야 긴 본문이 행을 오른쪽으로 늘리지 않는다. */}
           <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-gray-900">
-                {CATEGORY_LABELS[inquiry.category]}
-              </span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full ${
-                  isResolved
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-200 text-gray-700'
-                }`}>
-                {STATUS_LABELS[inquiry.status]}
-              </span>
-              {showAnswerChip && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                  이전 답변
+            <span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <span className="flex h-5 items-center justify-between gap-2 whitespace-nowrap">
+                <span className="text-sm font-semibold text-gray-900">
+                  {CATEGORY_LABELS[inquiry.category]}
                 </span>
-              )}
-              <span className="ml-auto text-xs text-gray-500 whitespace-nowrap">
-                {dateLabel} {rowAt}
+                <span
+                  className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${
+                    isResolved
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}>
+                  {STATUS_LABELS[inquiry.status]}
+                </span>
+              </span>
+              <span className="flex h-5 items-center justify-between gap-2 whitespace-nowrap sm:flex-1">
+                <span>
+                  {showAnswerChip && (
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                      이전 답변
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {dateLabel} {rowAt}
+                </span>
               </span>
             </span>
+            {/* 메타가 없어도 같은 공간을 확보한다. 좁은 화면에서만 날짜·시간과 호실을 두 줄로 나눈다. */}
+            <span className="mt-1 grid h-10 grid-rows-2 items-center text-[13px] leading-5 text-gray-700 sm:flex sm:h-5 sm:gap-3">
+              {metaParts?.fallback ? (
+                <span
+                  className="row-span-2 line-clamp-2 break-words sm:line-clamp-1"
+                  title={meta}>
+                  {metaParts.fallback}
+                </span>
+              ) : (
+                <>
+                  <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
+                    {metaParts?.date && (
+                      <>
+                        <span className="text-xs text-gray-600">
+                          {metaParts.label}
+                        </span>
+                        <span>{metaParts.date}</span>
+                        <span className="font-semibold text-gray-900">
+                          {metaParts.time}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                    {metaParts?.room && (
+                      <>
+                        <span className="shrink-0 text-xs text-gray-600">
+                          호실
+                        </span>
+                        <span
+                          className="truncate font-semibold text-[#002D56]"
+                          title={metaParts.room}>
+                          {metaParts.room}
+                        </span>
+                      </>
+                    )}
+                    {metaParts?.notice && (
+                      <span className="shrink-0 text-xs text-gray-600">
+                        {metaParts.notice}
+                      </span>
+                    )}
+                  </span>
+                </>
+              )}
+            </span>
             {meta && (
-              <span className="mt-1 block text-xs text-gray-500">{meta}</span>
+              <span id={metaId} className="sr-only">
+                {meta}
+              </span>
             )}
-            {/* block 을 같이 주면 안 된다. tailwind 는 .line-clamp-2{display:-webkit-box} 를
-                .block{display:block} 보다 먼저 내보내는데 명시도가 같아 뒤에 오는 block 이 이긴다
-                — 클램프가 통째로 죽어 본문 전문이 그려진다(실측: 200px vs 40px). -webkit-box
-                자체가 블록 레벨이라 block 은 애초에 필요 없다. */}
-            <span className="mt-1 text-sm text-gray-800 line-clamp-2 break-words">
+            <span className="mt-1 block h-5 truncate text-sm text-gray-800">
               {inquiry.content}
             </span>
           </span>

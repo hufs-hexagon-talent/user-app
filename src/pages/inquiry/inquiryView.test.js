@@ -7,6 +7,7 @@ import {
   metaLabel,
   retryState,
   rowDate,
+  rowMeta,
   sortResolvedLatestFirst,
 } from './inquiryView';
 
@@ -22,13 +23,21 @@ describe('rowDate', () => {
       }),
     ).toEqual({ label: '답변', at: '2026-08-30T11:40:00' });
     expect(
-      rowDate({ status: 'OPEN', resolvedAt: null, createAt: '2026-09-01T10:00:00' }),
+      rowDate({
+        status: 'OPEN',
+        resolvedAt: null,
+        createAt: '2026-09-01T10:00:00',
+      }),
     ).toEqual({ label: '접수', at: '2026-09-01T10:00:00' });
   });
 
   it('답변 시각이 없는 답변 완료는 접수 시각으로 대신한다', () => {
     expect(
-      rowDate({ status: 'RESOLVED', resolvedAt: null, createAt: '2026-08-01T10:00:00' }),
+      rowDate({
+        status: 'RESOLVED',
+        resolvedAt: null,
+        createAt: '2026-08-01T10:00:00',
+      }),
     ).toEqual({ label: '접수', at: '2026-08-01T10:00:00' });
   });
 });
@@ -108,6 +117,60 @@ describe('metaLabel', () => {
       }),
     ).toBe('예약 2026-09-01 10:00~11:00 428-2');
     expect(metaLabel({ category: 'FACILITY', roomName: null })).toBeNull();
+  });
+});
+
+describe('rowMeta', () => {
+  it('예약 요약의 날짜·시간·공백을 포함한 호실을 분리하고 취소 여부를 보존한다', () => {
+    expect(
+      rowMeta({
+        category: 'ATTENDANCE',
+        reservationId: null,
+        reservationSummary: '2026-09-04 19:00~20:00 세미나실 306-3',
+      }),
+    ).toEqual({
+      label: '예약',
+      date: '2026-09-04',
+      time: '19:00~20:00',
+      room: '세미나실 306-3',
+      notice: '취소된 예약',
+    });
+  });
+
+  it('시설 문의는 발생 일시·삭제된 방을 보여주고 구 문의는 예약 요약을 사용한다', () => {
+    const occurredAt = '2026-09-05T04:40:00Z';
+    expect(
+      rowMeta({
+        category: 'FACILITY',
+        roomId: null,
+        roomName: '428',
+        occurredAt,
+      }),
+    ).toEqual({
+      label: '발생',
+      date: format(new Date(occurredAt), 'yyyy-MM-dd'),
+      time: format(new Date(occurredAt), 'HH:mm'),
+      room: '428',
+      notice: '삭제된 방',
+    });
+    expect(
+      rowMeta({
+        category: 'FACILITY',
+        reservationId: 3,
+        reservationSummary: '2026-09-04 19:00~20:00 306-3',
+      }),
+    ).toMatchObject({ label: '예약', room: '306-3', notice: null });
+  });
+
+  it('해석할 수 없는 과거 요약을 버리지 않으며 메타가 없으면 null이다', () => {
+    expect(
+      rowMeta({
+        category: 'ETC',
+        reservationId: 3,
+        reservationSummary: '과거 예약 요약',
+      }),
+    ).toEqual({ fallback: '예약 과거 예약 요약' });
+    expect(rowMeta({ category: 'ETC', reservationSummary: null })).toBeNull();
   });
 });
 

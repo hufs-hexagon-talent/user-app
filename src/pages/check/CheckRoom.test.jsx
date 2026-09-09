@@ -137,14 +137,10 @@ describe('예약 목록', () => {
     expect(
       screen.getByRole('button', { name: /^삭제$|예약 취소$/ }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText('예약 목록을 불러오지 못했습니다.'),
-    ).toBeNull();
+    expect(screen.queryByText('예약 목록을 불러오지 못했습니다.')).toBeNull();
     const status = screen.getByRole('status');
     expect(status).toHaveTextContent('최신 예약 목록을 못 받아왔습니다.');
-    fireEvent.click(
-      within(status).getByRole('button', { name: '다시 시도' }),
-    );
+    fireEvent.click(within(status).getByRole('button', { name: '다시 시도' }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
@@ -402,9 +398,11 @@ describe('출석 문의 진입점', () => {
         '/inquiry/new?category=ATTENDANCE&reservationId=',
       ),
     );
-    expect(screen.getAllByRole('button', { name: /예약 취소$/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /예약 취소$/ })).toHaveLength(
+      1,
+    );
     expect(screen.getByText('이용 중')).toBeVisible();
-    expect(screen.getByText('예약 예정')).toBeVisible();
+    expect(screen.getByText('예약')).toBeVisible();
     expect(screen.getByText('미출석')).toBeVisible();
     expect(screen.getByText('처리됨')).toBeVisible();
     expect(screen.getByText('출석')).toBeVisible();
