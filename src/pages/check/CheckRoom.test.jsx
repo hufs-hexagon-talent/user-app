@@ -287,6 +287,24 @@ describe('내 노쇼 현황 팝오버', () => {
     expect(screen.getByText(/방문하지 않은 횟수는 1번 입니다/)).toBeVisible();
   });
 
+  // admin-app 설계서(2026-09-08 회원·예약 화면 설계) 2.4의 서버 변경 뒤에는 미출석 예약이 하나도 없는
+  // 차단 계정에 두 날짜가 비어 온다.
+  // 두 날짜를 다 보는 지금 조건이 그 응답의 전제다 — 이 케이스는 그 날짜 검사가 통째로 사라질 때
+  // 빈 기간이 새는 것을 잡는다. 한쪽만 보도록 좁히는 변경은 이 픽스처로 잡히지 않는다.
+  test('기간이 비어 온 차단 응답은 기간 줄을 그리지 않는다', () => {
+    useMyInfo.mockReturnValue(
+      loaded({ name: '홍길동', serviceRole: 'BLOCKED' }),
+    );
+    useBlockedPeriod.mockReturnValue(
+      loaded({ data: { startBlockedDate: null, endBlockedDate: null } }),
+    );
+    renderCheck();
+    openNoShowPopover();
+
+    expect(screen.queryByText(/예약 제한 기간/)).toBeNull();
+    expect(screen.getByText(/방문하지 않은 횟수는 1번 입니다/)).toBeVisible();
+  });
+
   test('팝오버 안을 눌러도 닫히지 않는다', () => {
     renderCheck();
     // 팝오버가 열리면 나머지 화면은 aria-hidden 이 되므로 버튼은 열기 전에 잡아 둔다.
