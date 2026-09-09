@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Button } from 'flowbite-react';
@@ -7,6 +7,7 @@ import { ChevronRight } from 'lucide-react';
 import { useMyInquiries } from '../../api/inquiry.api';
 
 import { CATEGORY_LABELS, STATUS_LABELS } from './inquiryLabels';
+import InquiryHistoryDrawer from './InquiryHistoryDrawer';
 import {
   hasAnswer,
   metaLabel,
@@ -22,12 +23,15 @@ const newInquiryButtonClass =
 const retryLinkClass =
   'inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline';
 const rowClass =
-  'flex w-full min-h-[44px] items-center gap-3 rounded-md border p-3 text-left break-keep hover:bg-gray-50 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56] sm:p-4';
+  'flex w-full min-h-[44px] items-center gap-3 rounded-md border p-3 text-left break-keep hover:bg-gray-50 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]';
+const PREVIEW_COUNT = 3;
 
 const formatAt = value => format(new Date(value), 'yyyy-MM-dd HH:mm');
 
 const MyInquiries = () => {
   const navigate = useNavigate();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyStatus, setHistoryStatus] = useState('OPEN');
   const {
     data: inquiries,
     isPending,
@@ -42,19 +46,25 @@ const MyInquiries = () => {
   // 실패해도 data 를 유지하므로, 오류를 먼저 보면 이미 받은 답변을 화면에서 지우게 된다.
   const hasList = !isPending && Array.isArray(inquiries);
   const list = hasList ? inquiries : [];
-  // 서버가 접수일 내림차순으로 준다. 답변 대기는 그대로, 답변 완료는 답변한 순서로.
-  const open = list.filter(inquiry => inquiry.status !== 'RESOLVED');
+  // 구획의 최근 3건과 전체 이력이 같은 순서를 쓴다. 서버가 주는 배열 순서에는 의존하지 않는다.
+  const open = list
+    .filter(inquiry => inquiry.status !== 'RESOLVED')
+    .sort((a, b) => new Date(b.createAt) - new Date(a.createAt));
   const resolved = sortResolvedLatestFirst(
     list.filter(inquiry => inquiry.status === 'RESOLVED'),
   );
+  const openHistory = status => {
+    setHistoryStatus(status);
+    setHistoryOpen(true);
+  };
 
   // 목록은 훑는 화면이다. 답변도 본문도 여기서는 펼치지 않는다 — 긴 문의 한 건이 화면을
   // 통째로 먹으면 새 답변이 눈에 띄지 않는다. 전문은 상세(/inquiry/:id)에서 읽는다.
-  const renderRow = inquiry => {
+  const renderRow = (inquiry, inDrawer = false) => {
     const isResolved = inquiry.status === 'RESOLVED';
     const meta = metaLabel(inquiry);
     const metaParts = rowMeta(inquiry);
-    const metaId = `inquiry-meta-${inquiry.inquiryId}`;
+    const metaId = `${inDrawer ? 'history' : 'preview'}-inquiry-meta-${inquiry.inquiryId}`;
     // 배지가 이미 "답변 완료" 를 말한다. 표시가 필요한 곳은 재오픈뿐이다 — 거기서만
     // 배지(답변 대기)와 실제 상태(답변 있음)가 어긋난다.
     const showAnswerChip = !isResolved && hasAnswer(inquiry);
@@ -74,11 +84,12 @@ const MyInquiries = () => {
             STATUS_LABELS[inquiry.status]
           }${showAnswerChip ? ' 이전 답변' : ''} ${dateLabel}일 ${rowAt} 문의 보기`}
           aria-describedby={meta ? metaId : undefined}
-          className={rowClass}>
+          className={`${rowClass}${inDrawer ? '' : ' sm:p-4'}`}>
           {/* flex 아이템의 기본 min-width: auto 는 콘텐츠 최소 크기보다 작아지지 않는다.
               0 으로 내려야 긴 본문이 행을 오른쪽으로 늘리지 않는다. */}
           <span className="min-w-0 flex-1">
-            <span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <span
+              className={`flex flex-col gap-1${inDrawer ? '' : ' sm:flex-row sm:items-center sm:gap-2'}`}>
               <span className="flex h-5 items-center justify-between gap-2 whitespace-nowrap">
                 <span className="text-sm font-semibold text-gray-900">
                   {CATEGORY_LABELS[inquiry.category]}
@@ -92,7 +103,8 @@ const MyInquiries = () => {
                   {STATUS_LABELS[inquiry.status]}
                 </span>
               </span>
-              <span className="flex h-5 items-center justify-between gap-2 whitespace-nowrap sm:flex-1">
+              <span
+                className={`flex h-5 items-center justify-between gap-2 whitespace-nowrap${inDrawer ? '' : ' sm:flex-1'}`}>
                 <span>
                   {showAnswerChip && (
                     <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
@@ -106,10 +118,11 @@ const MyInquiries = () => {
               </span>
             </span>
             {/* 메타가 없어도 같은 공간을 확보한다. 좁은 화면에서만 날짜·시간과 호실을 두 줄로 나눈다. */}
-            <span className="mt-1 grid h-10 grid-rows-2 items-center text-[13px] leading-5 text-gray-700 sm:flex sm:h-5 sm:gap-3">
+            <span
+              className={`mt-1 grid h-10 grid-rows-2 items-center text-[13px] leading-5 text-gray-700${inDrawer ? '' : ' sm:flex sm:h-5 sm:gap-3'}`}>
               {metaParts?.fallback ? (
                 <span
-                  className="row-span-2 line-clamp-2 break-words sm:line-clamp-1"
+                  className={`row-span-2 line-clamp-2 break-words${inDrawer ? '' : ' sm:line-clamp-1'}`}
                   title={meta}>
                   {metaParts.fallback}
                 </span>
@@ -168,20 +181,8 @@ const MyInquiries = () => {
     );
   };
 
-  return (
-    <div className="px-4 sm:px-8 py-8 max-w-2xl mx-auto">
-      {/* 문의하기 버튼은 로딩·실패·빈 목록에서도 항상 그린다. 목록 API 가 죽어도 접수 경로가
-          살아 있어야 한다(폼은 이 API 에 의존하지 않는다). */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-bold text-2xl text-black">내 문의</h1>
-        <button
-          type="button"
-          onClick={() => navigate('/inquiry/new')}
-          className={newInquiryButtonClass}>
-          문의하기
-        </button>
-      </div>
-
+  const queryNotice = (
+    <>
       {isPending && (
         <div className="text-center text-gray-500 py-16">
           문의 목록을 불러오는 중입니다.
@@ -214,6 +215,24 @@ const MyInquiries = () => {
           </button>
         </div>
       )}
+    </>
+  );
+
+  return (
+    <div className="px-4 sm:px-8 py-8 max-w-2xl mx-auto">
+      {/* 문의하기 버튼은 로딩·실패·빈 목록에서도 항상 그린다. 목록 API 가 죽어도 접수 경로가
+          살아 있어야 한다(폼은 이 API 에 의존하지 않는다). */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="font-bold text-2xl text-black">내 문의</h1>
+        <button
+          type="button"
+          onClick={() => navigate('/inquiry/new')}
+          className={newInquiryButtonClass}>
+          문의하기
+        </button>
+      </div>
+
+      {queryNotice}
 
       {hasList && list.length === 0 && (
         <div className="text-center text-gray-500 py-16">
@@ -221,28 +240,69 @@ const MyInquiries = () => {
         </div>
       )}
 
-      {/* 두 섹션 모두 제목을 갖고 접지 않는다. 행이 짧아 접을 이유가 없다. */}
+      {/* 최근 문의는 바로 보여주고, 오래된 이력은 같은 구획의 전체 보기로 이어진다. */}
       {open.length > 0 && (
         <section aria-labelledby="open-inquiries-heading" className="mb-8">
-          <h2
-            id="open-inquiries-heading"
-            className="mb-3 text-lg font-bold text-black">
-            답변 대기 {open.length}건
-          </h2>
-          <ul className="space-y-3">{open.map(renderRow)}</ul>
+          <div className="mb-3 flex min-h-[44px] items-center justify-between gap-3">
+            <h2
+              id="open-inquiries-heading"
+              className="text-lg font-bold text-black">
+              답변 대기 {open.length}건
+            </h2>
+            {open.length > PREVIEW_COUNT && (
+              <button
+                type="button"
+                aria-label="답변 대기 전체 보기"
+                aria-haspopup="dialog"
+                onClick={() => openHistory('OPEN')}
+                className={`${retryLinkClass} text-sm`}>
+                전체 보기
+              </button>
+            )}
+          </div>
+          <ul className="space-y-3">
+            {open.slice(0, PREVIEW_COUNT).map(inquiry => renderRow(inquiry))}
+          </ul>
         </section>
       )}
 
       {resolved.length > 0 && (
         <section aria-labelledby="resolved-inquiries-heading">
-          <h2
-            id="resolved-inquiries-heading"
-            className="mb-3 text-lg font-bold text-black">
-            답변 완료 {resolved.length}건
-          </h2>
-          <ul className="space-y-3">{resolved.map(renderRow)}</ul>
+          <div className="mb-3 flex min-h-[44px] items-center justify-between gap-3">
+            <h2
+              id="resolved-inquiries-heading"
+              className="text-lg font-bold text-black">
+              답변 완료 {resolved.length}건
+            </h2>
+            {resolved.length > PREVIEW_COUNT && (
+              <button
+                type="button"
+                aria-label="답변 완료 전체 보기"
+                aria-haspopup="dialog"
+                onClick={() => openHistory('RESOLVED')}
+                className={`${retryLinkClass} text-sm`}>
+                전체 보기
+              </button>
+            )}
+          </div>
+          <ul className="space-y-3">
+            {resolved
+              .slice(0, PREVIEW_COUNT)
+              .map(inquiry => renderRow(inquiry))}
+          </ul>
         </section>
       )}
+      <InquiryHistoryDrawer
+        open={historyOpen}
+        status={historyStatus}
+        onStatusChange={setHistoryStatus}
+        onClose={() => setHistoryOpen(false)}
+        openInquiries={open}
+        resolvedInquiries={resolved}
+        hasList={hasList}
+        notice={queryNotice}
+        renderRow={inquiry => renderRow(inquiry, true)}
+      />
     </div>
   );
 };
