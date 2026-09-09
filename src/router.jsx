@@ -12,6 +12,7 @@ import Footer from './components/footer/Footer';
 import NavigationBar from './components/navbar/NavigationBar';
 import ConnectionError from './components/ConnectionError';
 import SessionExpiryWatcher from './components/SessionExpiryWatcher';
+import ScrollToTop from './components/ScrollToTop';
 
 import Check from './pages/check/CheckRoom';
 import LoginPage from './pages/login/LoginPage';
@@ -24,6 +25,9 @@ import LoggedOutPassword from './pages/password/LoggedOutPassword';
 import EmailVerify from './pages/password/EmailVerify';
 import MyPage from './pages/mypage/MyPage';
 import EmailSend from './pages/email/EmailSend';
+import MyInquiries from './pages/inquiry/MyInquiries';
+import InquiryForm from './pages/inquiry/InquiryForm';
+import InquiryDetail from './pages/inquiry/InquiryDetail';
 
 import AdminPage from './pages/admin/AdminPage';
 import SignUp from './pages/admin/user/SignUp';
@@ -42,6 +46,18 @@ import CreatePartition from './pages/admin/operation/facility/partition/CreatePa
 import BannerUpload from './pages/admin/banner/BannerUpload';
 import BannerManage from './pages/admin/banner/BannerManage';
 import ServiceStatus from './pages/admin/status/ServiceStatus';
+
+// USER·BLOCKED·ADMIN 세 블록이 공유한다(RESIDENT 제외) — BLOCKED 학생이 노쇼 이의를
+// 접수하는 주 대상이라 빼면 기능 취지에 어긋난다.
+const inquiryRoutes = (
+  <>
+    <Route path="/inquiry" element={<MyInquiries />} />
+    <Route path="/inquiry/new" element={<InquiryForm />} />
+    {/* 정적 세그먼트가 먼저 매칭되므로 /inquiry/new 가 :id 에 먹히지 않는다(선언 순서 무관). */}
+    <Route path="/inquiry/:id" element={<InquiryDetail />} />
+    <Route path="/inquiry/:id/edit" element={<InquiryForm />} />
+  </>
+);
 
 const RouterComponent = () => {
   const { loggedIn } = useAuth();
@@ -98,6 +114,7 @@ const RouterComponent = () => {
     return (
       <BrowserRouter basename={'/'}>
         <SessionExpiryWatcher />
+        <ScrollToTop />
         <div className="min-h-screen flex flex-col">
           <NavigationBar showSnackbar={openSnackbar} locked />
           <div className="flex-grow">
@@ -119,6 +136,7 @@ const RouterComponent = () => {
   return (
     <BrowserRouter basename={'/'}>
       <SessionExpiryWatcher />
+      <ScrollToTop />
       <div className="min-h-screen flex flex-col">
         <NavigationBar showSnackbar={openSnackbar} />
 
@@ -137,6 +155,7 @@ const RouterComponent = () => {
                   <Route path="/otp" element={<OtpPage />} />
                   <Route path="/mypage" element={<MyPage />} />
                   <Route path="/emailSend" element={<EmailSend />} />
+                  {inquiryRoutes}
                 </>
               )}
             {loggedIn && serviceRole === 'ADMIN' && (
@@ -146,9 +165,10 @@ const RouterComponent = () => {
                 <Route path="/check" element={<Check />} />
                 <Route path="/mypage" element={<MyPage />} />
                 <Route path="/emailSend" element={<EmailSend />} />
+                {inquiryRoutes}
 
-                {/* 어드민 */}
-                <Route path="/admin" element={<AdminPage />}>
+                {/* 관리자. /admin 은 admin-app 이 쓰므로 이 화면은 /manage 로 비켜 준다 */}
+                <Route path="/manage" element={<AdminPage />}>
                   {/* 통계 */}
                   <Route path="user-statics" element={<UserStatics />} />
                   <Route

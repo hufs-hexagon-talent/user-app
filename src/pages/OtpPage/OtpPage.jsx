@@ -8,6 +8,7 @@ import { useOtp } from '../../api/checkin.api';
 import {
   getOtpView,
   getRemainingSeconds,
+  getRemainingValidMinutes,
   isOtpExpired,
   OTP_TTL_MS,
 } from './otpTimer';
@@ -59,8 +60,8 @@ const Qrcode = () => {
 
   // 값이 없거나 만료된 QR 은 대봐야 출석이 되지 않는다. 정상처럼 보이는 QR 을
   // 그려두면 학생이 그대로 대다가 출석 시간을 넘기므로 아예 그리지 않는다.
-  // 다만 30초 카운트다운이 끝나 재조회하는 동안에는 이전 QR 이 아직 유효하므로
-  // 새 QR 이 올 때까지 그대로 보여 준다.
+  // 다만 재조회하는 동안이나 재조회에 실패했을 때는 이전 QR 이 아직 유효(300초)하므로
+  // 그대로 보여 준다. 실패는 그 아래에 남은 시간과 다시 시도를 함께 둔다.
   const otpValue = otp?.verificationCode;
   const hasOtp = Boolean(otpValue);
   const timer = getRemainingSeconds(dataUpdatedAt, now);
@@ -74,7 +75,9 @@ const Qrcode = () => {
     isError,
     isExpired,
   });
-  const showQr = view === 'ready';
+  const showQr = view === 'ready' || view === 'stale';
+  const isStale = view === 'stale';
+  const staleMinutes = getRemainingValidMinutes(dataUpdatedAt, now);
   const isLoadingOtp = view === 'loading';
   const statusMessage = isLoadingOtp
     ? 'QR 을 불러오는 중입니다'
@@ -143,23 +146,35 @@ const Qrcode = () => {
           </div>
         )}
       </div>
-      <div className="flex justify-center p-10 mb-5 first:ml-10 selection:p-10 items-center">
-        {showQr ? (
+      <div className="flex flex-col items-center gap-3 px-10 pt-10 pb-5 mb-5">
+        {view === 'ready' && (
           <span className="ml-2">
             {timer > 0
               ? `${timer}초 남았습니다`
               : 'QR 을 다시 발급하는 중입니다'}
           </span>
-        ) : (
-          (isError || isExpired) && (
-            <Button
-              size="sm"
-              color="dark"
-              onClick={() => refetch()}
-              disabled={isFetching}>
-              {isFetching ? '다시 발급하는 중' : '다시 시도'}
-            </Button>
-          )
+        )}
+        {/* 새 QR 을 못 받았어도 화면의 QR 은 아직 유효하다. 남은 시간을 분 단위로 알려 문 앞의
+            학생이 그대로 대도 된다는 것을 안다. 자동 재조회는 실패 뒤 멈추므로 버튼을 같이 둔다. */}
+        {isStale && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="w-64 text-center text-sm text-gray-700 break-keep">
+            새 QR 을 받지 못했습니다. 지금 QR 은{' '}
+            {staleMinutes >= 1
+              ? `${staleMinutes}분 뒤까지 쓸 수 있어요.`
+              : '곧 만료돼요.'}
+          </p>
+        )}
+        {(isStale || (!showQr && (isError || isExpired))) && (
+          <Button
+            size="sm"
+            color="dark"
+            onClick={() => refetch()}
+            disabled={isFetching}>
+            {isFetching ? '다시 발급하는 중' : '다시 시도'}
+          </Button>
         )}
       </div>
     </div>

@@ -104,18 +104,25 @@ const MyPage = () => {
         </div>
       </div>
 
-      {/* 메뉴 */}
+      {/* 메뉴 — 항목은 <button>. div onClick 은 키보드로 못 간다. */}
       <div id="menu">
-        {/* 내 예약 관리 */}
         <div className="menu-section">
           <div className="menu-title">내 예약 관리</div>
           <div className="menu-items">
-            <div className="menu-item" onClick={() => navigate('/otp')}>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/otp')}>
               내 QR코드
-            </div>
-            <div className="menu-item" onClick={() => navigate('/check')}>
+              <span aria-hidden="true">›</span>
+            </button>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/check')}>
               내 예약 조회
-            </div>
+              <span aria-hidden="true">›</span>
+            </button>
           </div>
         </div>
         {/* 내 계정 관리 */}
@@ -128,28 +135,35 @@ const MyPage = () => {
             이메일 변경
           </div>
         </div> */}
-        {/* 문의 및 건의 */}
+        {/* 문의 — 접수는 폼으로 바로, 답변 확인은 목록으로. 마이페이지에 오는 이유가 그 둘이다. */}
         <div className="menu-section">
-          <div className="menu-title">문의 및 건의</div>
-          <div
-            className="menu-item"
-            onClick={() =>
-              window.open(
-                'https://hwangbbang.notion.site/1ac6628bcfd1802aa2fef92695b8b378',
-              )
-            }>
-            정정 요청
+          <div className="menu-title">문의</div>
+          <div className="menu-items">
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/inquiry/new')}>
+              문의하기
+              <span aria-hidden="true">›</span>
+            </button>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => navigate('/inquiry')}>
+              내 문의
+              <span aria-hidden="true">›</span>
+            </button>
           </div>
-          <div
-            className="menu-item"
-            onClick={() =>
-              window.open(
-                'https://hwangbbang.notion.site/ebd/1ac6628bcfd1807a93a1eed927f37595',
-                '_blank',
-                'noopener,noreferrer',
-              )
-            }>
-            의견 보내기
+        </div>
+        {/* 이용 안내 — 상단 네비게이션에 있던 "이용 규칙" 탭을 여기로 내렸다. 로그인한
+            학생이 규칙을 다시 볼 일은 예약·문의를 확인하러 마이페이지에 들어왔을 때라,
+            매 화면 상단에 자리를 차지하는 것보다 이 메뉴에 두는 편이 찾기 쉽다. */}
+        <div className="menu-section">
+          <div className="menu-title">이용 안내</div>
+          <div className="menu-items">
+            <div className="menu-item" onClick={() => navigate('/notice')}>
+              이용 규칙
+            </div>
           </div>
         </div>
       </div>

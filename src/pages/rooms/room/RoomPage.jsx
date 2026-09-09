@@ -1,22 +1,19 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import DatePicker, { registerLocale } from 'react-datepicker';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from '@mui/material';
+import { Typography } from '@mui/material';
 import {
   addMinutes,
   format,
   parse,
   isBefore,
   differenceInMinutes,
-  areIntervalsOverlapping,
 } from 'date-fns';
 
 import Banner from '../../admin/banner/Banner';
@@ -38,9 +35,41 @@ import {
   normalizeErrorCode,
   RESERVE_AUTH_FAILED_MESSAGE,
 } from './reservationSlot';
+import ReservationTimeTable from './ReservationTimeTable';
+import { SLOT_INTERVAL_MINUTE } from './slotState';
+import TimeTableLegend from './TimeTableLegend';
+import SelectionBar from './SelectionBar';
 import CustomButton from '../../../components/button/Button';
 import { Button } from 'flowbite-react';
 import { Modal } from 'flowbite-react';
+import { durationLabel } from './durationLabel';
+import { shortDateLabel } from './dateLabel';
+import { modalTheme } from '../../../components/modal/modalTheme';
+
+// 취소·예약 버튼(flowbite Button, node_modules/flowbite-react/dist/esm/components/Button/theme.mjs)
+// 의 색은 theme.color 를 통째로 바꾼다 — className 으로 hover 색만 덧붙이면 theme.color.light/
+// dark 기본 문자열에 남아 있는 dark:bg-gray-600 등 다크모드 클래스가 지워지지 않고 그대로
+// 남는다(className 은 twMerge 순서상 맨 뒤라 같은 성질끼리만 덮어쓴다). 이 디자인은 다크모드가
+// 없으므로 색 문자열 자체를 다크 변형 없이 새로 준다. 크기(50px·16px 반경 등)는 다크모드와
+// 무관해 className 에 둔다.
+// inner.base 기본값: "flex items-stretch transition-all duration-200" — 안쪽 <span> 을 버튼
+// 정중앙에 놓도록 h-full/w-full/items-center/justify-center 로 바꾼다.
+// size.md 기본값: "px-4 py-2 text-sm" — d5.css 의 padding:0, font-size:15px, font-weight:700,
+// line-height:1 로 바꾼다(letter-spacing 은 바깥 button 클래스에 두면 상속되어 span 에도
+// 적용된다).
+const reserveActionButtonTheme = {
+  color: {
+    light:
+      'border border-[#D9D4CD] bg-white text-[#39434F] shadow-none enabled:hover:border-[#CBC5BD] enabled:hover:bg-[#F7F5F2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]',
+    dark: 'border-0 bg-[#002D56] text-white shadow-[0_8px_18px_-9px_rgba(0,45,86,0.85),inset_0_1px_0_rgba(255,255,255,0.1)] enabled:hover:bg-[#013C6E] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]',
+  },
+  inner: {
+    base: 'flex h-full w-full items-center justify-center',
+  },
+  size: {
+    md: 'p-0 text-[15px] font-bold leading-none',
+  },
+};
 
 const RoomPage = () => {
   // snackBar
@@ -51,11 +80,24 @@ const RoomPage = () => {
     },
   });
 
+  // react-simple-snackbar 는 매 렌더 새 함수를 돌려준다. 그대로 의존성에 넣으면
+  // 아래 useCallback 들이 매번 새로 만들어져 표의 memo 가 무력해진다.
+  const openSnackbarRef = useRef(openSnackbar);
+  openSnackbarRef.current = openSnackbar;
+  const showSnackbar = useCallback(message => {
+    openSnackbarRef.current(message);
+  }, []);
+
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedRangeFrom, setSelectedRangeFrom] = useState(null);
   const [selectedRangeTo, selSelectedRangeTo] = useState(null);
-  // 조회 실패 시 null 로 두면 달력 제한이 풀려 학생이 날짜를 직접 고를 수 있다
-  const [availableDate, setAvailableDate] = useState([]);
+  // null 은 "달력 제한 없음". 응답 전·조회 실패·목록이 빈 경우 모두 null 로 둔다.
+  // 빈 배열을 그대로 includeDates 에 주면 react-datepicker 가 "허용 날짜 0개" 로 읽어
+  // 35칸이 전부 잠기고 월 이동 화살표까지 사라져 학생이 아무것도 할 수 없다.
+  const [availableDate, setAvailableDate] = useState(null);
+  // 서버가 200 + 빈 목록을 준 경우(방학처럼 운영 일정이 0건). 오류가 아니라 catch 를 안 탄다.
+  // 이때 "다른 날짜를 선택해 주세요" 는 지킬 수 없는 지시라 안내를 사실대로 바꾼다.
+  const [noAvailableDates, setNoAvailableDates] = useState(false);
   const [earliestStartTime, setEarliestStartTime] = useState(null);
   const [startHour, setStartHour] = useState(null);
   const [startMinute, setStartMinute] = useState(null);
@@ -63,6 +105,11 @@ const RoomPage = () => {
   const [endMinute, setEndMinute] = useState(null);
   const [maxReservationMinute, setMaxReservationMinute] = useState(null);
   const [openReserveModal, setOpenReserveModal] = useState(false);
+  // 모달이 열리며 닫기 버튼에 자동 포커스가 가면 마우스 사용자에게도 focus-visible 링이
+  // 보인다(flowbite Modal 이 FloatingFocusManager 로 initialFocus 대상에 포커스를 준다).
+  // 대신 대화상자 컨테이너(role="dialog")를 initialFocus 로 지정한다 — WAI-ARIA APG 권장
+  // 방식이고, 스크린리더는 aria-labelledby 로 제목을 읽으므로 안내가 끊기지 않는다.
+  const reserveDialogRef = useRef(null);
 
   const navigate = useNavigate();
   const today = new Date();
@@ -88,10 +135,12 @@ const RoomPage = () => {
   });
   const { loggedIn: isLoggedIn } = useAuth();
 
-  const hasRooms =
-    !isReservationsPending &&
-    !isReservationsError &&
-    reservationsByRooms?.length > 0;
+  // 분기 순서: 표가 손에 있으면 isError 여도 표를 그린다 — react-query v5 는 재조회가 실패해도
+  // data 를 유지한다. 30초 폴링이나 앱 복귀 재조회가 한 번 실패했다고 표를 오류 카드로 바꾸면
+  // 모바일은 유일한 예약 버튼(SelectionBar)까지 사라진다(MyInquiries 의 hasList 와 같은 규칙).
+  const hasReservationData =
+    !isReservationsPending && Array.isArray(reservationsByRooms);
+  const hasRooms = hasReservationData && reservationsByRooms.length > 0;
 
   // 화면을 열어둔 채 시간이 지나면 지난 칸이 저절로 잠기도록 현재 시각을 갱신한다
   const [now, setNow] = useState(() => new Date());
@@ -167,24 +216,26 @@ const RoomPage = () => {
       hour: endHour,
       minute: endMinute,
     },
-    intervalMinute: 30,
+    intervalMinute: SLOT_INTERVAL_MINUTE,
     maxReservationMinute: maxReservationMinute,
   };
 
-  const times =
-    startHour !== null && startMinute !== null
-      ? createTimeTable(timeTableConfig)
-      : [];
+  const times = useMemo(
+    () =>
+      startHour !== null && startMinute !== null
+        ? createTimeTable(timeTableConfig)
+        : [],
+    [startHour, startMinute, endHour, endMinute, maxReservationMinute],
+  );
 
   // date-picker에서 날짜 선택할 때마다 실행되는 함수
   const handleDateChange = date => {
+    // 입력칸을 비우면 onChange(null) 이 온다. format(null) 은 RangeError 를 던진다.
+    if (!date) return;
     const formattedDate = format(date, 'yyyy-MM-dd');
     // date picker에서 선택한 날짜 저장
     setSelectedDate(formattedDate);
   };
-
-  const isSomethingSelected =
-    selectedRoom && selectedRangeFrom && selectedRangeTo;
 
   // 슬롯의 상태 토글하는 함수
   const toggleSlot = useCallback(
@@ -247,7 +298,7 @@ const RoomPage = () => {
 
       // 최대 예약 시간을 넘는 연장은 안내만 하고 선택은 그대로 둔다
       if (isOverDue) {
-        openSnackbar(maxMinutesExceededMessage(selectedRoom?.eachMaxMinute));
+        showSnackbar(maxMinutesExceededMessage(selectedRoom?.eachMaxMinute));
         return;
       }
 
@@ -262,7 +313,7 @@ const RoomPage = () => {
       selectedRoom,
       selectedRangeFrom,
       selectedRangeTo,
-      openSnackbar,
+      showSnackbar,
     ],
   );
 
@@ -335,32 +386,84 @@ const RoomPage = () => {
     [doReserve, isLoggedIn, selectedRoom, selectedRangeFrom, selectedRangeTo],
   );
 
-  // 최대 예약 시간에 부합하는지 계산하는 함수
-  const handleCellClick = (partition, timeIndex) => {
-    const slotDateFrom = parse(
-      `${selectedDate} ${times[timeIndex]}`,
-      'yyyy-MM-dd HH:mm',
-      new Date(),
-    );
-
-    // 갱신 주기 사이에 지나가 버린 칸이 눌리지 않게 클릭 시점으로 한 번 더 확인한다
-    const clickedAt = new Date();
-    if (clickedAt > addMinutes(slotDateFrom, timeTableConfig.intervalMinute)) {
-      setNow(clickedAt);
-      return;
-    }
-
-    // 표의 공통 범위가 아니라 방별 운영시간으로 검사한다
-    const isClosed = isOutsideOperationHours(
-      format(slotDateFrom, 'HH:mm'),
-      partition.operationStartTime,
-      partition.operationEndTime,
-    );
-
-    if (!isClosed) {
-      toggleSlot(partition, times[timeIndex]);
+  const openReserveConfirm = () => {
+    if (isReserving) return;
+    if (selectedRoom && selectedRangeFrom && selectedRangeTo) {
+      setOpenReserveModal(true);
+    } else {
+      showSnackbar('원하는 호실과 시간대를 선택해주세요.');
     }
   };
+
+  // 최대 예약 시간에 부합하는지 계산하는 함수
+  const handleCellClick = useCallback(
+    (partition, timeIndex) => {
+      const slotDateFrom = parse(
+        `${selectedDate} ${times[timeIndex]}`,
+        'yyyy-MM-dd HH:mm',
+        new Date(),
+      );
+
+      // 갱신 주기 사이에 지나가 버린 칸이 눌리지 않게 클릭 시점으로 한 번 더 확인한다
+      const clickedAt = new Date();
+      if (clickedAt > addMinutes(slotDateFrom, SLOT_INTERVAL_MINUTE)) {
+        setNow(clickedAt);
+        return;
+      }
+
+      // 표의 공통 범위가 아니라 방별 운영시간으로 검사한다
+      const isClosed = isOutsideOperationHours(
+        format(slotDateFrom, 'HH:mm'),
+        partition.operationStartTime,
+        partition.operationEndTime,
+      );
+
+      if (!isClosed) {
+        toggleSlot(partition, times[timeIndex]);
+      }
+    },
+    [selectedDate, times, toggleSlot],
+  );
+
+  const handleSlotClick = useCallback(
+    (room, timeIndex, state) => {
+      if (!state.selectable) return;
+      handleCellClick(room, timeIndex);
+    },
+    [handleCellClick],
+  );
+
+  // 매 렌더 새 객체를 만들면 표에 넘기는 selection prop 이 계속 바뀌어 표의 memo 가 무력해진다.
+  const selection = useMemo(
+    () =>
+      selectedRoom && selectedRangeFrom && selectedRangeTo
+        ? {
+            partitionId: selectedRoom.partitionId,
+            from: selectedRangeFrom,
+            to: selectedRangeTo,
+          }
+        : null,
+    [selectedRoom, selectedRangeFrom, selectedRangeTo],
+  );
+
+  // 예약 확인 모달의 타임레일에 쓰는 값. 순수 함수 결과라 useMemo 는 필요 없다.
+  const modalDateLabel = shortDateLabel(selectedDate);
+  const modalFromLabel = selectedRangeFrom
+    ? format(selectedRangeFrom, 'HH:mm')
+    : '';
+  const modalToLabel = selectedRangeTo ? format(selectedRangeTo, 'HH:mm') : '';
+  const modalDurationText =
+    selectedRangeFrom && selectedRangeTo
+      ? durationLabel(differenceInMinutes(selectedRangeTo, selectedRangeFrom))
+      : '';
+  // 타임레일은 시각 표현이라 시작/종료 라벨과 점선이 스크린리더에 조각으로 읽힌다.
+  // 블록 전체를 한 문장으로 읽도록 aria-label 을 만든다.
+  const modalTimeAriaLabel =
+    modalFromLabel && modalToLabel
+      ? `${modalDateLabel} ${modalFromLabel}부터 ${modalToLabel}까지${
+          modalDurationText ? `, ${modalDurationText}` : ''
+        }`
+      : '';
 
   // date-picker 설정
   registerLocale('ko', ko);
@@ -370,7 +473,9 @@ const RoomPage = () => {
     const getDate = async () => {
       try {
         const dates = await fetchDate(departmentId);
-        setAvailableDate(dates);
+        const hasDates = Array.isArray(dates) && dates.length > 0;
+        setAvailableDate(hasDates ? dates : null);
+        setNoAvailableDates(!hasDates);
       } catch {
         // 목록이 비어 있으면 달력의 모든 날짜가 잠기므로 제한을 풀고 안내한다
         setAvailableDate(null);
@@ -413,6 +518,9 @@ const RoomPage = () => {
                 locale={ko}
                 minDate={today}
                 includeDates={availableDate}
+                // 허용 날짜가 이번 달에 없어도 화살표는 남긴다(비활성 표시). 화살표까지 사라지면
+                // 고장 난 화면으로 보인다.
+                showDisabledMonthNavigation
                 onChange={handleDateChange}
                 dateFormat="yyyy년 MM월 dd일"
                 showIcon
@@ -420,30 +528,31 @@ const RoomPage = () => {
             </div>
           </div>
         </div>
-        {/* 예약 가능/불가능 색 표현 */}
-        {hasRooms && (
-          <div id="squares" className="flex pl-4">
-            <div
-              className="w-6 h-6 mt-10"
-              style={{ backgroundColor: '#F1EEE9' }}></div>
-            <div className="mt-10 ml-2">예약 가능</div>
-            <div
-              className="w-6 h-6 mt-10 ml-5"
-              style={{ backgroundColor: '#7599BA' }}></div>
-            <div className="mt-10 ml-2">예약 선택</div>
-            <div
-              className="w-6 h-6 mt-10 ml-5"
-              style={{ backgroundColor: '#002D56' }}></div>
-            <div className="mt-10 ml-2">예약 완료</div>
+        {hasRooms && isReservationsError && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mx-8 md:mx-12 lg:mx-96 mb-2 flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
+            <span>
+              최신 예약 현황을 못 받아왔습니다. 표시된 내용이 실제와 다를 수
+              있습니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => refetchReservations()}
+              className="inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline">
+              다시 시도
+            </button>
           </div>
         )}
+        {hasRooms && <TimeTableLegend />}
         {/* timeTable 시작 */}
         {isReservationsPending && (
           <div className="text-center mx-8 md:mx-12 lg:mx-96 py-12 my-12 rounded-lg bg-gray-100 text-gray-900">
             예약 현황을 불러오는 중입니다.
           </div>
         )}
-        {!isReservationsPending && isReservationsError && (
+        {!isReservationsPending && !hasReservationData && isReservationsError && (
           <div className="text-center mx-8 md:mx-12 lg:mx-96 py-12 my-12 rounded-lg bg-gray-100 text-gray-900">
             예약 현황을 불러오지 못했습니다.
             <div className="mt-4 flex justify-center">
@@ -456,237 +565,139 @@ const RoomPage = () => {
             </div>
           </div>
         )}
-        {hasRooms && (
+        {hasRooms && times.length > 0 && (
           <div>
-            <TableContainer
-              sx={{
-                overflowX: 'auto',
-                marginTop: '20px',
-                '@media (max-width : 1300px)': {
-                  overflowX: 'scroll',
-                },
-                // sticky 기준점이 어긋나지 않게 padding 대신 margin 으로 띄운다
-                width: 'calc(100% - 60px)',
-                marginLeft: '60px',
-              }}>
-              <Table>
-                <TableHead
-                  sx={{
-                    overflowX: 'auto',
-                    borderBottom: 'none',
-                  }}>
-                  <TableRow>
-                    <TableCell
-                      align="center"
-                      width={100}
-                      sx={{
-                        position: 'sticky',
-                        left: 0,
-                        zIndex: 3,
-                        backgroundColor: '#fff',
-                      }}
-                    />
-                    {times.map((time, timeIndex) => (
-                      <TableCell
-                        key={timeIndex}
-                        align="center"
-                        width={200}
-                        className="relative"
-                        sx={{
-                          borderRight: 'none',
-                          borderTop: 'none',
-                          borderBottom: 'none',
-                        }}>
-                        <div style={{ width: 20, height: 30 }}>
-                          <span className="absolute top-1/2 left-0 transform -translate-x-1/2 -translate-y-1/2 bg-white px-2">
-                            {time}
-                          </span>
-                        </div>
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {reservationsByRooms?.map((reservationsByRoom, i) => (
-                    <TableRow key={i}>
-                      <TableCell
-                        sx={{
-                          px: 2,
-                          py: 2,
-                          borderLeft: '1px solid #ccc',
-                          whiteSpace: 'nowrap',
-                          position: 'sticky',
-                          left: 0,
-                          zIndex: 2,
-                          backgroundColor: '#fff',
-                        }}>
-                        {`${reservationsByRoom.roomName}-${reservationsByRoom.partitionNumber}`}
-                      </TableCell>
-                      {times.map((time, timeIndex) => {
-                        if (timeIndex === times.length - 1) {
-                          return null; // 마지막 열을 제외
-                        }
-
-                        const slotDateFrom = parse(
-                          `${selectedDate} ${time}`,
-                          'yyyy-MM-dd HH:mm',
-                          new Date(),
-                        );
-                        const slotDateTo = addMinutes(slotDateFrom, 30);
-                        const slotDateFromPlus30 = addMinutes(slotDateFrom, 30);
-                        const isClosed = isOutsideOperationHours(
-                          format(slotDateFrom, 'HH:mm'),
-                          reservationsByRoom.operationStartTime,
-                          reservationsByRoom.operationEndTime,
-                        );
-                        const isPast = now > slotDateFromPlus30;
-                        const isSelected =
-                          reservationsByRoom.partitionId ===
-                            selectedRoom?.partitionId &&
-                          areIntervalsOverlapping(
-                            { start: selectedRangeFrom, end: selectedRangeTo },
-                            { start: slotDateFrom, end: slotDateTo },
-                          );
-                        const isReserved =
-                          reservationsByRoom?.reservationTimeRanges.some(
-                            reservation => {
-                              const reservationStart = new Date(
-                                reservation.startDateTime,
-                              );
-                              const reservationEnd = new Date(
-                                reservation.endDateTime,
-                              );
-                              return (
-                                slotDateFrom >= reservationStart &&
-                                slotDateFrom < reservationEnd
-                              );
-                            },
-                          );
-                        const isSelectable =
-                          !isPast && !isReserved && !isClosed;
-                        const isInSelectableRange =
-                          selectedRangeTo &&
-                          differenceInMinutes(slotDateTo, selectedRangeFrom) <=
-                            reservationsByRoom.eachMaxMinute &&
-                          differenceInMinutes(slotDateTo, selectedRangeFrom) >
-                            0 &&
-                          selectedRoom?.partitionId ===
-                            reservationsByRoom.partitionId;
-                        // 지난 칸은 선택 표시보다 잠금 표시가 우선이다
-                        const mode = isReserved
-                          ? 'reserved'
-                          : isPast
-                            ? 'past'
-                            : isSelected
-                              ? 'selected'
-                              : isClosed
-                                ? 'closed'
-                                : 'none';
-
-                        return (
-                          <TableCell
-                            key={timeIndex}
-                            onClick={() =>
-                              isSelectable &&
-                              handleCellClick(reservationsByRoom, timeIndex)
-                            }
-                            className={isSelected ? 'selected' : ''}
-                            style={{
-                              opacity:
-                                !isInSelectableRange && isSomethingSelected
-                                  ? 0.4
-                                  : 1,
-                              backgroundColor: {
-                                past: '#AAAAAA',
-                                closed: '#AAAAAA',
-                                selected: '#7599BA',
-                                reserved: '#002D56',
-                                none: '#F1EEE9',
-                              }[mode],
-                              borderRight: '1px solid #ccc',
-                              borderLeft: '1px solid #ccc',
-                              borderTop: '1px solid #ccc',
-                              borderBottom: '1px solid #ccc',
-                              cursor: isSelectable ? 'pointer' : 'not-allowed',
-                            }}></TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <ReservationTimeTable
+              rooms={reservationsByRooms}
+              times={times}
+              selectedDate={selectedDate}
+              now={now}
+              selection={selection}
+              onCellClick={handleSlotClick}
+            />
           </div>
         )}
-        {!isReservationsPending && !isReservationsError && !hasRooms && (
+        {hasReservationData && !hasRooms && (
           <div className="text-center mx-8 md:mx-12 lg:mx-96 py-12 my-12 rounded-lg bg-gray-100 text-gray-900">
-            선택한 날짜에는 예약할 수 있는 방이 없습니다. <br />
-            다른 날짜를 선택해 주세요.
+            {noAvailableDates ? (
+              <>
+                지금은 예약할 수 있는 날짜가 없습니다. <br />
+                운영 일정이 등록되면 예약할 수 있습니다.
+              </>
+            ) : (
+              <>
+                선택한 날짜에는 예약할 수 있는 방이 없습니다. <br />
+                다른 날짜를 선택해 주세요.
+              </>
+            )}
           </div>
         )}
         {hasRooms && (
-          <div className="p-10 flex justify-end">
+          <div className="hidden p-10 md:flex md:justify-end">
             <CustomButton
               disabled={isReserving}
-              onClick={() => {
-                if (isReserving) return;
-                if (selectedRoom && selectedRangeFrom && selectedRangeTo) {
-                  setOpenReserveModal(true);
-                } else {
-                  openSnackbar('원하는 호실과 시간대를 선택해주세요.');
-                }
-              }}
+              onClick={openReserveConfirm}
               text="예약하기"
             />
           </div>
         )}
+        {hasRooms && (
+          <SelectionBar
+            roomLabel={
+              selectedRoom
+                ? `${selectedRoom.roomName}-${selectedRoom.partitionNumber}`
+                : null
+            }
+            from={selectedRangeFrom}
+            to={selectedRangeTo}
+            disabled={isReserving}
+            onReserve={openReserveConfirm}
+          />
+        )}
       </div>
 
-      {/* 선택된 예약 정보 모달 */}
+      {/* 선택된 예약 정보 모달 — "타임레일" 디자인. 크림 블록·시간 레일은 시각 표현이라
+          시작/종료 라벨과 점선 조각이 아니라 이 블록 전체를 한 문장 aria-label 로 읽는다
+          (modalTimeAriaLabel, 위에서 계산). */}
       <Modal
+        ref={reserveDialogRef}
+        initialFocus={reserveDialogRef}
         className="flex items-center justify-center"
+        theme={modalTheme}
+        dismissible
         show={openReserveModal}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
         onClose={() => setOpenReserveModal(false)}>
-        <Modal.Header>
-          <h2 className="text-xl font-semibold">현재 선택한 예약 정보</h2>
-        </Modal.Header>
+        <Modal.Header>이대로 예약할까요?</Modal.Header>
         <Modal.Body>
-          <div className="space-y-2 text-base">
-            <p className="mb-1">
-              <span className="font-medium">호실명 :</span>{' '}
-              <span>
+          <div className="flex flex-col gap-[13px] rounded-[18px] bg-[#F1EEE9] px-4 pb-[17px] pt-[15px] shadow-[inset_0_0_0_1px_rgba(0,45,86,0.06)]">
+            <div className="flex min-w-0 items-center justify-between gap-[10px]">
+              <span className="whitespace-nowrap text-[13.5px] font-semibold leading-[1.2] tracking-[-0.012em] text-[#566072]">
+                {modalDateLabel}
+              </span>
+              <span className="flex-none whitespace-nowrap rounded-full border border-[rgba(0,45,86,0.14)] bg-white px-[11px] py-[6px] text-[14px] font-bold leading-none tracking-[-0.012em] text-[#002D56] shadow-[0_1px_1px_rgba(0,45,86,0.05)]">
                 {selectedRoom?.roomName}-{selectedRoom?.partitionNumber}
               </span>
-            </p>
-            <p className="mb-1">
-              <span className="font-medium">선택한 날짜 :</span>{' '}
-              <span>{format(selectedDate, 'yyyy년 MM월 dd일')}</span>
-            </p>
-            <p className="mb-1">
-              <span className="font-medium">사용 시간 :</span>{' '}
-              <span>
-                {selectedRangeFrom && format(selectedRangeFrom, 'HH:mm')} ~{' '}
-                {selectedRangeTo && format(selectedRangeTo, 'HH:mm')}
-              </span>
-            </p>
+            </div>
+
+            <div
+              role="group"
+              aria-label={modalTimeAriaLabel}
+              className="flex items-end gap-2 pt-px">
+              <div
+                aria-hidden="true"
+                className="flex min-w-0 flex-none flex-col gap-[3px]">
+                <span className="h-[14px] text-[11px] font-bold leading-[14px] tracking-[0.09em] text-[#566072]">
+                  시작
+                </span>
+                <span className="h-7 text-[25px] font-extrabold leading-7 tracking-[-0.03em] tabular-nums text-[#002D56] max-[359px]:text-[22px]">
+                  {modalFromLabel}
+                </span>
+              </div>
+
+              <div
+                aria-hidden="true"
+                className="relative flex h-7 min-w-[62px] flex-1 items-center justify-center self-end">
+                <span
+                  className="absolute left-0 right-0 top-1/2 -mt-px h-[2px] rounded-[2px]"
+                  style={{
+                    backgroundImage:
+                      'repeating-linear-gradient(90deg, rgba(0,45,86,.34) 0 5px, rgba(0,45,86,0) 5px 9px)',
+                  }}
+                />
+                {modalDurationText && (
+                  <span className="relative z-[1] mx-[10px] whitespace-nowrap rounded-full border border-[rgba(0,45,86,0.14)] bg-white px-[10px] py-[6px] text-[12px] font-extrabold leading-none tracking-[-0.01em] text-[#002D56] shadow-[0_1px_2px_rgba(0,45,86,0.07)] max-[359px]:mx-[6px] max-[359px]:px-[8px] max-[359px]:py-[5px]">
+                    {modalDurationText}
+                  </span>
+                )}
+              </div>
+
+              <div
+                aria-hidden="true"
+                className="flex min-w-0 flex-none flex-col items-end gap-[3px] text-right">
+                <span className="h-[14px] text-[11px] font-bold leading-[14px] tracking-[0.09em] text-[#566072]">
+                  종료
+                </span>
+                <span className="h-7 text-[25px] font-extrabold leading-7 tracking-[-0.03em] tabular-nums text-[#002D56] max-[359px]:text-[22px]">
+                  {modalToLabel}
+                </span>
+              </div>
+            </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <div className="flex justify-end space-x-2 w-full">
+          <div className="flex w-full gap-2.5">
             <Button
+              color="light"
+              theme={reserveActionButtonTheme}
+              className="h-[50px] min-h-[50px] w-[104px] flex-none rounded-[16px] p-0 tracking-[-0.012em] transition duration-150 enabled:active:translate-y-px enabled:active:scale-[0.995] max-[359px]:w-[88px]"
               onClick={() => {
                 setOpenReserveModal(false);
-              }}
-              className="bg-red-600 text-white hover:bg-red-700">
+              }}>
               취소
             </Button>
             <Button
               disabled={isReserving}
+              theme={reserveActionButtonTheme}
               onClick={() => {
                 if (isReserving) return;
                 handleReservation({
@@ -699,7 +710,7 @@ const RoomPage = () => {
                 setOpenReserveModal(false);
               }}
               color="dark"
-              className="text-white ">
+              className="h-[50px] min-h-[50px] flex-1 rounded-[16px] p-0 tracking-[-0.012em] transition duration-150 enabled:active:translate-y-px enabled:active:scale-[0.995]">
               예약
             </Button>
           </div>

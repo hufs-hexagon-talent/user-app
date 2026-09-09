@@ -16,37 +16,37 @@ const menuData = [
     label: '통계 및 현황',
     icon: HiChartPie,
     children: [
-      { label: '사용자 통계', to: '/admin/user-statics' },
-      { label: '예약 통계', to: '/admin/reservation-statics' },
+      { label: '사용자 통계', to: '/manage/user-statics' },
+      { label: '예약 통계', to: '/manage/reservation-statics' },
     ],
   },
   {
     label: '사용자 관리',
     icon: HiUser,
-    children: [{ label: '사용자 상태 관리', to: '/admin/user-state' }],
+    children: [{ label: '사용자 상태 관리', to: '/manage/user-state' }],
   },
   {
     label: '예약 관리',
     icon: HiClipboardCheck,
-    children: [{ label: '예약 상태 관리', to: '/admin/reservation-state' }],
+    children: [{ label: '예약 상태 관리', to: '/manage/reservation-state' }],
   },
   {
     label: '운영 관리',
     icon: HiCalendar,
     children: [
-      { label: '정책 관리', to: '/admin/policy' },
+      { label: '정책 관리', to: '/manage/policy' },
       {
         label: '운영 시간 관리',
         children: [
-          { label: '스케줄 생성', to: '/admin/schedule/create' },
-          { label: '스케줄 조회', to: '/admin/schedule/fetch' },
+          { label: '스케줄 생성', to: '/manage/schedule/create' },
+          { label: '스케줄 조회', to: '/manage/schedule/fetch' },
         ],
       },
       {
         label: '시설 관리',
         children: [
-          { label: 'Room', to: '/admin/facility/room' },
-          { label: 'Partition', to: '/admin/facility/partition' },
+          { label: 'Room', to: '/manage/facility/room' },
+          { label: 'Partition', to: '/manage/facility/partition' },
         ],
       },
     ],
@@ -55,8 +55,8 @@ const menuData = [
     label: '배너 관리',
     icon: HiFilm,
     children: [
-      { label: '배너 생성', to: '/admin/banner/create' },
-      { label: '배너 관리', to: '/admin/banner/manage' },
+      { label: '배너 생성', to: '/manage/banner/create' },
+      { label: '배너 관리', to: '/manage/banner/manage' },
     ],
   },
 ];

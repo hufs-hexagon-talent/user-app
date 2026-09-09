@@ -16,9 +16,13 @@
   margin-bottom: 4rem;
 }
 
+/* 섹션 제목은 그룹 라벨이다. 항목(1.5rem)보다 작고 회색이어야 위계가 읽힌다 —
+   전에는 데스크톱에서 항목과 같은 1.5rem, 모바일에서는 항목(1.25rem)보다 작은
+   1.1rem 이라 제목·항목의 구분이 없거나 뒤집혀 있었다. */
 .menu-title {
-  font-size: 1.5rem;
+  font-size: 1.125rem;
   font-weight: bold;
+  color: #566072;
   margin-bottom: 0.5rem;
   display: block;
 }
@@ -28,13 +32,22 @@
   flex-direction: column;
 }
 
+/* 항목은 <button> 이다. UA 기본(회색 배경·가운데 정렬·작은 글씨)을 지우고 본래 모양을 유지한다.
+   font: inherit 가 font-size 를 되돌리므로 그 뒤에 크기를 다시 준다. */
 .menu-item {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #ccc;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
   font-size: 1.5rem;
   cursor: pointer;
-  border-bottom: 1px solid #ccc;
   padding: 1rem;
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
 #logo {
@@ -61,7 +74,7 @@
   }
 
   .menu-title {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
 
   .menu-item {

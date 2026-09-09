@@ -71,7 +71,7 @@ const Schedule = () => {
     <div>
       <div className="flex">
         <p
-          onClick={() => navigate(`/admin/schedule/fetch`)}
+          onClick={() => navigate(`/manage/schedule/fetch`)}
           className="text-gray-500 cursor-pointer">
           스케줄 조회 &gt;{' '}
         </p>

@@ -15,8 +15,12 @@ export const useReserve = () => {
       return res.data; // 명시적으로 반환
     },
     // 성공하면 내 칸이, 겹침(412)으로 실패하면 남이 먼저 잡은 칸이 표에 반영돼야 한다.
+    // 내 예약·최근 예약 캐시도 같이 비운다 — 예약 직후 문의 폼의 예약 선택 목록과
+    // 마이페이지의 현재 예약 배지가 마운트 재조회에만 기대면 캐시가 먼저 그려져 잠깐 빠진다.
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['reservationsByRooms'] });
+      queryClient.invalidateQueries({ queryKey: ['userReservation'] });
+      queryClient.invalidateQueries({ queryKey: ['latest'] });
     },
   });
 };

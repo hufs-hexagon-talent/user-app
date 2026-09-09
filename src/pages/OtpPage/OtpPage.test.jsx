@@ -135,7 +135,9 @@ describe('OtpPage', () => {
     expect(screen.getByText('29초 남았습니다')).toBeInTheDocument();
   });
 
-  it('재조회에 실패하면 이전 QR 을 감추고 다시 시도 버튼을 보여 준다', () => {
+  // 서버 OTP 유효 시간은 300초, 재조회는 30초마다. 재조회가 실패했다고 아직 4분 넘게 유효한
+  // QR 을 지우면 문 앞의 학생이 대면 출석에 쓸 수 있던 수단을 잃는다.
+  it('재조회에 실패해도 유효한 이전 QR 은 그대로 보여 주고 다시 시도를 함께 둔다', () => {
     const refetch = jest.fn();
     renderWith(
       queryState({
@@ -148,11 +150,54 @@ describe('OtpPage', () => {
 
     advance(31_000);
 
-    expect(screen.queryByTestId('qr')).toBeNull();
-    expect(screen.getByText('QR 을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByTestId('qr')).toHaveTextContent('otp-1');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '새 QR 을 받지 못했습니다. 지금 QR 은 4분 뒤까지 쓸 수 있어요.',
+    );
+    expect(screen.queryByText('QR 을 다시 발급하는 중입니다')).toBeNull();
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeEnabled();
     // 실패했을 때는 자동으로 반복하지 않는다.
     expect(refetch).not.toHaveBeenCalled();
+  });
+
+  it('실패 뒤 다시 시도하는 동안에는 버튼을 잠그고 QR 은 유지한다', () => {
+    renderWith(
+      queryState({
+        data: otpAt(T0, 'otp-1'),
+        dataUpdatedAt: T0,
+        isError: true,
+        isFetching: true,
+      }),
+    );
+
+    expect(screen.getByTestId('qr')).toHaveTextContent('otp-1');
+    expect(
+      screen.getByRole('button', { name: '다시 발급하는 중' }),
+    ).toBeDisabled();
+  });
+
+  it('실패한 채 유효 시간이 다 지나면 QR 을 감추고 다시 시도만 남긴다', () => {
+    renderWith(
+      queryState({
+        data: otpAt(T0, 'otp-1'),
+        dataUpdatedAt: T0,
+        isError: true,
+      }),
+    );
+
+    advance(TTL_MS + 1_000);
+
+    expect(screen.queryByTestId('qr')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeEnabled();
+  });
+
+  it('보여 줄 QR 없이 실패하면 실패 문구와 다시 시도를 보여 준다', () => {
+    renderWith(queryState({ isError: true }));
+
+    expect(screen.queryByTestId('qr')).toBeNull();
+    expect(screen.getByText('QR 을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeEnabled();
   });
 
   it('기기 시계가 서버보다 앞서 expiresAt 이 지나 보여도 방금 받은 QR 은 그린다', () => {

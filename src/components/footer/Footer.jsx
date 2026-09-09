@@ -1,31 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useServiceRole } from '../../api/user.api';
-import { useSnackbar } from 'react-simple-snackbar';
-import useAuth from '../../hooks/useAuth';
+
 import './Footer.css';
 
 const Footer = () => {
-  const [openSnackbar, closeSnackbar] = useSnackbar({
-    position: 'top-right',
-    style: {
-      backgroundColor: '#FF3333',
-    },
-  });
   const navigate = useNavigate();
-  const { loggedIn } = useAuth();
-  const { data: serviceRole } = useServiceRole();
-
-  const handleAdminClick = async () => {
-    if (loggedIn && serviceRole === 'ADMIN') {
-      navigate('/admin/user-statics');
-    } else {
-      openSnackbar('관리자 외에는 접근 권한이 없습니다.');
-      setTimeout(() => {
-        closeSnackbar();
-      }, 3000);
-    }
-  };
 
   return (
     <div className="w-full">
@@ -74,13 +53,19 @@ const Footer = () => {
                 </a>
               </span>
             </p>
-            {loggedIn && serviceRole === 'ADMIN' && (
-              <div
-                onClick={handleAdminClick}
-                className="inline hover:underline cursor-pointer text-gray-400 text-sm mt-3">
-                관리자
-              </div>
-            )}
+            {/* 이용 규칙이 상단 네비에서 마이페이지 안으로 내려가면서, 마이페이지
+                라우트가 없는 계정에게는 도달할 길이 없어졌다. 비로그인 방문자,
+                RESIDENT(키오스크), 비밀번호 변경이 강제된 상태가 그렇다.
+                푸터는 그 세 경우에도 렌더되므로 여기에 경로를 남긴다.
+                로그인 여부·역할로 감싸면 안 되는 이유가 이것이다. */}
+            <p className="block">
+              <button
+                type="button"
+                onClick={() => navigate('/notice')}
+                className="mt-2 inline-block py-2 font-semibold text-white underline underline-offset-4 hover:text-footertextbrown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-footermainbg">
+                이용 규칙
+              </button>
+            </p>
           </div>
         </div>
       </footer>

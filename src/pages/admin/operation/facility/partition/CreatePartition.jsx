@@ -95,7 +95,7 @@ const CreatePartition = () => {
                     return (
                       <Table.Row
                         onClick={() => {
-                          navigate(`/admin/facility/room/${matchedRoomId}`);
+                          navigate(`/manage/facility/room/${matchedRoomId}`);
                         }}
                         key={roomName}
                         className="cursor-pointer hover:bg-gray-50">

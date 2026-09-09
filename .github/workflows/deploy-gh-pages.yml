@@ -39,6 +39,9 @@ jobs:
         run: yarn install --frozen-lockfile
         if: steps.cache.outputs.cache-hit != 'true'
 
+      - name: Test
+        run: CI=true yarn test --watchAll=false
+
       - name: Set PUBLIC_URL
         run: |
           PUBLIC_URL=$(echo $GITHUB_REPOSITORY | sed -r 's/^.+\/(.+)$/\/\1\//')
