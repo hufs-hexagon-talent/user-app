@@ -4,18 +4,18 @@ import { ko } from 'date-fns/locale';
 // 예약 선택 모달·예약 카드·내 문의 목록이 쓰는 표시 규칙(라벨·포맷·정렬).
 // 화면 로직은 여기에만 두고 컴포넌트는 그리기만 한다.
 
-// 출석 상태 라벨. CheckRoom.jsx 의 출석/미출석/처리됨 표기를 따르되, 아직 끝나지 않은
-// NOT_VISITED 예약은 "예약 예정" 으로 나눈다 — 서버의 노쇼 판정이 종료 시각 경과
-// (reservationEndTime < now) 이고 체크인도 종료 시각까지 가능하므로 경계는 종료 시각이다.
+// 출석 상태 라벨. NOT_VISITED 는 시작 전 "예약", 시작 후 종료까지 "이용 중" 으로 표시한다.
+// 서버의 노쇼 판정이 종료 시각 경과(reservationEndTime < now)이고 체크인도 종료
+// 시각까지 가능하므로, 종료 시각이 지난 뒤에만 "미출석" 으로 표시한다.
 // 내일 예약에 "미출석" 이 붙으면 차단된 학생이 노쇼로 오독한다. /check 표도 이 함수를 쓴다.
 export const reservationStateLabel = (reservation, now = new Date()) => {
   const state = reservation?.reservationState;
   if (state === 'VISITED') return '출석';
   if (state === 'NOT_VISITED') {
     if (new Date(reservation.reservationEndTime) < now) return '미출석';
-    // 시작은 지났고 종료는 안 지났다 — 아직 체크인할 수 있는 시간이라 "예약 예정" 도 아니다.
+    // 시작 시각부터 종료 시각까지는 아직 체크인할 수 있는 시간이다.
     if (new Date(reservation.reservationStartTime) <= now) return '이용 중';
-    return '예약 예정';
+    return '예약';
   }
   return '처리됨';
 };

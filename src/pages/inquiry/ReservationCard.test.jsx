@@ -6,7 +6,7 @@ import ReservationCard from './ReservationCard';
 const props = {
   room: '201-A',
   time: '2026-09-05 10:00~11:00',
-  state: '예약 예정',
+  state: '예약',
 };
 
 describe('ReservationCard', () => {
@@ -15,10 +15,10 @@ describe('ReservationCard', () => {
 
     expect(screen.getByText('201-A')).toBeInTheDocument();
     expect(screen.getByText('2026-09-05 10:00~11:00')).toBeInTheDocument();
-    expect(screen.getByText('예약 예정')).toBeInTheDocument();
+    expect(screen.getByText('예약')).toBeInTheDocument();
 
     rerender(<ReservationCard room="201-A" time="2026-09-05 10:00~11:00" />);
-    expect(screen.queryByText('예약 예정')).toBeNull();
+    expect(screen.queryByText('예약')).toBeNull();
   });
 
   // 클릭·aria-pressed 는 바깥 래퍼 버튼이 갖는다. 카드가 버튼을 그리면 <button> 안에

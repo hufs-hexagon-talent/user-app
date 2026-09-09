@@ -8,12 +8,12 @@ export const SLOT_PALETTE = {
   mine: { background: '#2F7DC4', pattern: null },
   reserved: { background: '#002D56', pattern: null },
   past: {
-    background: '#C7C4C0',
+    background: '#DFDCD7',
     pattern:
       'repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,0.05) 4px 8px)',
   },
   closed: {
-    background: '#C7C4C0',
+    background: '#DFDCD7',
     pattern:
       'repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,0.05) 4px 8px)',
   },
