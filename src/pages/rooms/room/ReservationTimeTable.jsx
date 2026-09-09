@@ -15,9 +15,8 @@ import { getSlotState, initialScrollIndex } from './slotState';
 import { TABLE_GUTTER_SX } from './tableGutter';
 import useTimeTableScroll from './useTimeTableScroll';
 
-// 스티키 호실명 열의 폭. 좌측 페이드 위치도 이 값 하나로 맞춰서
-// MUI(sx)와 Tailwind가 서로 다른 브레이크포인트에서 어긋나지 않게 한다.
 const STICKY_COL_WIDTH = { xs: 52, md: 100 };
+const GRID_BORDER = '1px solid #B6B4B0';
 
 const ReservationTimeTable = ({
   rooms,
@@ -52,10 +51,6 @@ const ReservationTimeTable = ({
       <Box
         sx={{
           position: 'relative',
-          // 페이드는 이 wrapper 를 기준으로 절대 위치를 잡는다. marginLeft/width 를
-          // TableContainer 에 두면 표시되는 표의 실제 가장자리와 페이드 기준점이 어긋난다.
-          // width 를 지정하지 않고 좌우 margin 만 준다. calc(100% - N) 과 marginLeft: N 을
-          // 함께 쓰면 왼쪽 N + 폭(100%-N) 이 100% 가 되어 오른쪽 여백이 0 이 됐다.
           marginX: TABLE_GUTTER_SX,
         }}>
         <TableContainer
@@ -65,7 +60,7 @@ const ReservationTimeTable = ({
             overflowX: 'auto',
             marginTop: '20px',
           }}>
-          <Table>
+          <Table sx={{ borderCollapse: 'separate', borderSpacing: 0 }}>
             <caption className="sr-only">호실별 30분 단위 예약 현황</caption>
             <TableHead sx={{ borderBottom: 'none' }}>
               <TableRow>
@@ -88,17 +83,29 @@ const ReservationTimeTable = ({
                     data-time-index={timeIndex}
                     component="th"
                     scope="col"
-                    align="center"
+                    align="left"
+                    aria-label={`${time}~${times[timeIndex + 1]}`}
                     sx={{
                       border: 'none',
-                      padding: { xs: '6px 0', md: '10px 0' },
+                      position: 'relative',
+                      padding: { xs: '6px 0 8px 4px', md: '10px 0 10px 4px' },
                       width: { xs: 44, md: 52 },
                       minWidth: { xs: 44, md: 52 },
                       fontSize: { xs: '10.5px', md: '12px' },
                       color: '#555',
                       whiteSpace: 'nowrap',
+                      fontVariantNumeric: 'tabular-nums',
+                      '&::after': {
+                        content: '""',
+                        position: 'absolute',
+                        // 본문 경계는 앞 셀의 오른쪽 1px 테두리다. 눈금도 같은 픽셀에 붙인다.
+                        left: -1,
+                        bottom: -1,
+                        height: time.endsWith(':00') ? 6 : 3,
+                        borderLeft: GRID_BORDER,
+                      },
                     }}>
-                    {time}
+                    {time.endsWith(':00') || timeIndex === 0 ? time : null}
                   </TableCell>
                 ))}
               </TableRow>
@@ -112,7 +119,11 @@ const ReservationTimeTable = ({
                     sx={{
                       px: { xs: 0.75, md: 2 },
                       py: { xs: 1, md: 2 },
-                      border: '1px solid #ccc',
+                      border: 'none',
+                      borderLeft: GRID_BORDER,
+                      borderRight: GRID_BORDER,
+                      borderBottom: GRID_BORDER,
+                      borderTop: i === 0 ? GRID_BORDER : 'none',
                       whiteSpace: 'nowrap',
                       position: 'sticky',
                       left: 0,
@@ -121,6 +132,19 @@ const ReservationTimeTable = ({
                       fontSize: { xs: '11.5px', md: '14px' },
                       width: STICKY_COL_WIDTH,
                       minWidth: STICKY_COL_WIDTH,
+                      // 스크롤 경계는 실제 고정 셀에 붙인다. 외부 페이드는 셀 폭과 어긋날 수 있다.
+                      '&::after': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        bottom: 0,
+                        right: -4,
+                        width: 4,
+                        pointerEvents: 'none',
+                        background: edges.left
+                          ? 'linear-gradient(to right, rgba(0, 45, 86, 0.12), transparent)'
+                          : 'none',
+                      },
                     }}>
                     {`${room.roomName}-${room.partitionNumber}`}
                   </TableCell>
@@ -164,7 +188,10 @@ const ReservationTimeTable = ({
                           opacity: state.outOfExtendRange ? 0.4 : 1,
                           backgroundColor: palette.background,
                           backgroundImage: palette.pattern ?? 'none',
-                          border: '1px solid #ccc',
+                          border: 'none',
+                          borderRight: GRID_BORDER,
+                          borderBottom: GRID_BORDER,
+                          borderTop: i === 0 ? GRID_BORDER : 'none',
                           cursor: state.selectable ? 'pointer' : 'not-allowed',
                           textAlign: 'center',
                           color: '#fff',
@@ -178,20 +205,6 @@ const ReservationTimeTable = ({
             </TableBody>
           </Table>
         </TableContainer>
-        {edges.left && (
-          <Box
-            aria-hidden
-            sx={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: STICKY_COL_WIDTH,
-              width: 24,
-              pointerEvents: 'none',
-              background: 'linear-gradient(to left, transparent, #fff)',
-            }}
-          />
-        )}
         {edges.right && (
           <Box
             aria-hidden

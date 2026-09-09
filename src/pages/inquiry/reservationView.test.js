@@ -40,7 +40,7 @@ describe('reservationStateLabel', () => {
   });
 
   // 서버의 노쇼 판정은 종료 시각 경과다. 진행 중(종료 전)인 예약은 아직 체크인할 수 있다.
-  it('NOT_VISITED 는 종료 시각이 지났을 때만 미출석, 시작 전이면 예약 예정', () => {
+  it('NOT_VISITED 는 종료 시각이 지났을 때만 미출석, 시작 전이면 예약', () => {
     expect(
       reservationStateLabel(
         reservation({
@@ -58,18 +58,18 @@ describe('reservationStateLabel', () => {
         }),
         now,
       ),
-    ).toBe('예약 예정');
+    ).toBe('예약');
   });
 });
 
 describe('reservationStateLabel 이용 중', () => {
-  // 시작은 지났고 종료는 안 지난 NOT_VISITED. "예약 예정" 도 "미출석" 도 아니다.
+  // 시작은 지났고 종료는 안 지난 NOT_VISITED. "예약" 도 "미출석" 도 아니다.
   it('NOT_VISITED 가 진행 중이면 이용 중', () => {
     const now = new Date('2026-09-05T10:30:00');
     expect(reservationStateLabel(reservation(), now)).toBe('이용 중');
     expect(
       reservationStateLabel(reservation(), new Date('2026-09-05T09:00:00')),
-    ).toBe('예약 예정');
+    ).toBe('예약');
   });
 });
 

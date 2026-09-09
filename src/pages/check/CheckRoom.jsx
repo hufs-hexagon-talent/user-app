@@ -232,7 +232,7 @@ const Check = () => {
                   <Table.Row
                     key={index}
                     className="bg-white dark:border-gray-700 dark:bg-gray-800 text-center text-gray-900">
-                    <Table.Cell>
+                    <Table.Cell className="whitespace-nowrap px-2 py-4">
                       {reservationStateLabel(reservation) === '처리됨' ? (
                         <Tooltip
                           title={
@@ -259,27 +259,31 @@ const Check = () => {
                     <Table.Cell className="px-2 py-4">
                       {format(end, 'HH:mm')}
                     </Table.Cell>
-                    <Table.Cell className="px-2 py-4">
-                      {/* 지난 미출석·처리됨은 문의로, 앞으로의 예약은 삭제로. 삭제 조건은 현행 그대로 —
-                          시작 15분 전 체크인으로 VISITED 인데 아직 시작 전인 행이 있다. */}
-                      {isDisputable(reservation)
-                        ? renderInquiryLink(reservation)
-                        : !(
-                            isPast || reservation.reservationState === 'VISITED'
-                          ) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenModal(reservation.reservationId);
-                              }}
-                              // 앱에서 예약을 취소하는 유일한 경로. 글자 높이(20px)만 눌리던 것을
-                              // 같은 자리의 문의 링크와 같은 44px 로 맞춘다. 접근 이름에 시각·호실을
-                              // 넣어 여러 행이 전부 "삭제" 로 읽히지 않게 한다.
-                              aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 예약 취소`}
-                              className="inline-flex min-h-[44px] items-center px-2 font-medium text-red-600 hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]">
-                              삭제
-                            </button>
-                          )}
+                    <Table.Cell className="px-2 py-1">
+                      {/* 44px 클릭 영역은 유지하고 여백을 줄여 기존 출석 행 높이에 맞춘다. */}
+                      <div className="flex min-h-[44px] items-center justify-center whitespace-nowrap">
+                        {/* 지난 미출석·처리됨은 문의로, 앞으로의 예약은 삭제로. 삭제 조건은 현행 그대로 —
+                            시작 15분 전 체크인으로 VISITED 인데 아직 시작 전인 행이 있다. */}
+                        {isDisputable(reservation)
+                          ? renderInquiryLink(reservation)
+                          : !(
+                              isPast ||
+                              reservation.reservationState === 'VISITED'
+                            ) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenModal(reservation.reservationId);
+                                }}
+                                // 앱에서 예약을 취소하는 유일한 경로. 글자 높이(20px)만 눌리던 것을
+                                // 같은 자리의 문의 링크와 같은 44px 로 맞춘다. 접근 이름에 시각·호실을
+                                // 넣어 여러 행이 전부 "삭제" 로 읽히지 않게 한다.
+                                aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 예약 취소`}
+                                className="inline-flex min-h-[44px] items-center px-2 font-medium text-red-600 hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]">
+                                삭제
+                              </button>
+                            )}
+                      </div>
                     </Table.Cell>
                   </Table.Row>
                 );

@@ -16,7 +16,7 @@ import ReservationPickerModal, {
   PICKER_STALE_MESSAGE,
 } from './ReservationPickerModal';
 
-// 종료가 과거인 NOT_VISITED = 미출석(이의 대상), 미래 = 예약 예정(대상 아님).
+// 종료가 과거인 NOT_VISITED = 미출석(이의 대상), 미래 = 예약(대상 아님).
 const NOSHOW = {
   reservationId: 10,
   roomName: '306',
@@ -53,7 +53,7 @@ const ALL = [NOSHOW, PROCESSED, VISITED, UPCOMING];
 const NAME_NOSHOW = '2026-08-05 10:00~11:00 306-1 미출석';
 const NAME_PROCESSED = '2026-08-04 14:00~15:00 428-2 처리됨';
 const NAME_VISITED = '2026-08-05 13:00~14:00 306-2 출석';
-const NAME_UPCOMING = '2099-01-01 10:00~11:00 306-3 예약 예정';
+const NAME_UPCOMING = '2099-01-01 10:00~11:00 306-3 예약';
 
 const renderPicker = (over = {}) => {
   const props = {

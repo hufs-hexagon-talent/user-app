@@ -23,7 +23,6 @@ describe('TimeTableLegend', () => {
   it('범례 라벨 순서가 정해진 대로다', () => {
     expect(LEGEND.map(entry => entry.label)).toEqual([
       '예약 가능',
-      '내 예약',
       '예약 완료',
       '예약 불가',
     ]);

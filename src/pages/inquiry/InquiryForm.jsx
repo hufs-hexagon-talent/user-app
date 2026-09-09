@@ -38,7 +38,7 @@ export const DEEP_LINK_MISSING_MESSAGE =
   '링크로 받은 예약을 찾지 못했습니다. 아래에서 골라 주세요.';
 export const DEEP_LINK_ERROR_MESSAGE = '예약을 불러오지 못했습니다.';
 export const EDIT_LOADING_MESSAGE = '문의를 불러오는 중입니다.';
-export const OCCURRED_AT_HINT = '비워 두면 접수 시각으로 봅니다.';
+export const OCCURRED_AT_HINT = '시간을 모르면 비워 두세요.';
 export const CONTENT_PLACEHOLDERS = {
   ATTENDANCE: '예: 14시에 QR을 찍었는데 미출석으로 표시됩니다.',
   FACILITY: '예: 문 옆 키오스크 화면이 켜지지 않습니다.',

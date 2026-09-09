@@ -62,7 +62,7 @@ jest.mock('react-router-dom', () => ({
 const doCreate = jest.fn();
 const doUpdate = jest.fn();
 
-// 종료 시각이 과거여야 NOT_VISITED 가 "미출석" 으로 고정된다(미래면 "예약 예정").
+// 종료 시각이 과거여야 NOT_VISITED 가 "미출석" 으로 고정된다(미래면 "예약").
 const RESERVATION_A = {
   reservationId: 10,
   roomName: '201',
