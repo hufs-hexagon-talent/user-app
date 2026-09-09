@@ -140,29 +140,13 @@ describe('MyInquiries', () => {
   });
 
   // 답변 완료도 예외가 아니다 — 전문과 관리자 답변은 상세에서만 읽는다.
-  it('두 섹션 모두 본문을 2줄로 자르고 관리자 답변은 목록에 싣지 않는다', () => {
+  it('두 섹션 모두 본문을 1줄로 자르고 관리자 답변은 목록에 싣지 않는다', () => {
     render(<MyInquiries />);
 
-    expect(screen.getByText(OPEN_INQUIRY.content)).toHaveClass('line-clamp-2');
-    expect(screen.getByText(RESOLVED_INQUIRY.content)).toHaveClass(
-      'line-clamp-2',
-    );
+    expect(screen.getByText(OPEN_INQUIRY.content)).toHaveClass('truncate');
+    expect(screen.getByText(RESOLVED_INQUIRY.content)).toHaveClass('truncate');
     expect(screen.queryByText('확인 후 출석 처리했습니다.')).toBeNull();
     expect(screen.queryByText(/관리자 답변/)).toBeNull();
-  });
-
-  // jsdom 은 CSS 를 적용하지 않아 클램프가 죽어도 위 테스트는 통과한다. tailwind 는
-  // .line-clamp-2{display:-webkit-box} 를 .block{display:block} 보다 먼저 내보내고 명시도가
-  // 같아서, 둘을 같이 주면 block 이 이겨 클램프가 통째로 무효가 된다(실측: 200px vs 40px).
-  // 클래스 조합 자체를 금지해서 잠근다.
-  it('본문에 line-clamp-2 와 block 을 함께 주지 않는다', () => {
-    render(<MyInquiries />);
-
-    [OPEN_INQUIRY, RESOLVED_INQUIRY].forEach(inquiry => {
-      const body = screen.getByText(inquiry.content);
-      expect(body).toHaveClass('line-clamp-2');
-      expect(body).not.toHaveClass('block');
-    });
   });
 
   // 긴 본문이 행을 오른쪽으로 늘리면 클램프가 잘릴 자리를 못 찾는다(admin Shell 과 같은 함정).
@@ -262,18 +246,22 @@ describe('MyInquiries', () => {
     ]);
     render(<MyInquiries />);
 
+    expect(within(resolvedItem()).getByText('2026-08-30')).toBeVisible();
+    expect(within(resolvedItem()).getByText('10:00~11:00')).toBeVisible();
+    expect(within(resolvedItem()).getByText('201-A')).toBeVisible();
     expect(
-      within(resolvedItem()).getByText('예약 2026-08-30 10:00~11:00 201-A'),
-    ).toBeInTheDocument();
-    expect(within(openItem()).getByText('306')).toBeInTheDocument();
+      within(resolvedItem()).getByRole('button'),
+    ).toHaveAccessibleDescription('예약 2026-08-30 10:00~11:00 201-A');
+    expect(within(openItem()).getByTitle('306')).toBeVisible();
     expect(
       within(itemOf('취소한 예약인데 출석 문제가 있어요.')).getByText(
-        '예약 2026-08-28 13:00~14:00 306-1 · 취소된 예약',
+        '취소된 예약',
       ),
-    ).toBeInTheDocument();
+    ).toBeVisible();
+    expect(within(itemOf('지워진 방의 고장')).getByText('428')).toBeVisible();
     expect(
-      within(itemOf('지워진 방의 고장')).getByText('428(삭제된 방)'),
-    ).toBeInTheDocument();
+      within(itemOf('지워진 방의 고장')).getByText('삭제된 방'),
+    ).toBeVisible();
   });
 
   it('문의가 없으면 안내 문구를 보여주고 헤더의 문의하기로 접수 화면에 간다', () => {

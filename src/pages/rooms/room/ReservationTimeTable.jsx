@@ -16,7 +16,7 @@ import { TABLE_GUTTER_SX } from './tableGutter';
 import useTimeTableScroll from './useTimeTableScroll';
 
 const STICKY_COL_WIDTH = { xs: 52, md: 100 };
-const GRID_BORDER = '1px solid #BDBBB7';
+const GRID_BORDER = '1px solid #B6B4B0';
 
 const ReservationTimeTable = ({
   rooms,
@@ -98,8 +98,9 @@ const ReservationTimeTable = ({
                       '&::after': {
                         content: '""',
                         position: 'absolute',
-                        left: 0,
-                        bottom: 0,
+                        // 본문 경계는 앞 셀의 오른쪽 1px 테두리다. 눈금도 같은 픽셀에 붙인다.
+                        left: -1,
+                        bottom: -1,
                         height: time.endsWith(':00') ? 6 : 3,
                         borderLeft: GRID_BORDER,
                       },

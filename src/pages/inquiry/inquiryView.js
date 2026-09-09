@@ -42,6 +42,40 @@ export const metaLabel = inquiry => {
   return reservationMeta(inquiry);
 };
 
+// 목록에서는 날짜·시간과 호실을 나눠 좁은 화면에서도 예약 시각 전체를 읽게 한다.
+// 기존 요약 문자열의 형식이 다르면 원문을 남긴다. 상세의 metaLabel 계약은 바꾸지 않는다.
+export const rowMeta = inquiry => {
+  if (!inquiry) return null;
+  if (
+    inquiry.category === 'FACILITY' &&
+    (inquiry.roomName || inquiry.occurredAt)
+  ) {
+    return {
+      label: '발생',
+      date: inquiry.occurredAt
+        ? format(new Date(inquiry.occurredAt), 'yyyy-MM-dd')
+        : null,
+      time: inquiry.occurredAt
+        ? format(new Date(inquiry.occurredAt), 'HH:mm')
+        : null,
+      room: inquiry.roomName,
+      notice: inquiry.roomName && inquiry.roomId == null ? '삭제된 방' : null,
+    };
+  }
+  if (!inquiry.reservationSummary) return null;
+  const parts = inquiry.reservationSummary.match(
+    /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}~\d{2}:\d{2}) (.+)$/,
+  );
+  if (!parts) return { fallback: reservationMeta(inquiry) };
+  return {
+    label: '예약',
+    date: parts[1],
+    time: parts[2],
+    room: parts[3],
+    notice: inquiry.reservationId == null ? '취소된 예약' : null,
+  };
+};
+
 // 행에 찍는 시각과 정렬 키는 같은 값이어야 목록이 뒤죽박죽으로 보이지 않는다. 답변 완료 구획은
 // 답변 시각으로 정렬하는데 행에는 접수 시각만 찍혀 있어, 8/1 접수 건에 오늘 답이 오면 맨 위에
 // 오면서 날짜는 8/1 로 보였다. 라벨 없이 찍으면 접수일을 답변일로 읽는다(admin-app 의 rowDate 와

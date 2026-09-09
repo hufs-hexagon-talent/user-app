@@ -31,8 +31,12 @@ export const SLOT_LABEL = {
 // 범례에 세우는 항목. covers 는 이 한 줄이 대신 설명하는 상태들이다.
 export const LEGEND = [
   { key: 'free', label: '예약 가능', covers: ['free'] },
-  { key: 'mine', label: '내 예약', covers: ['mine'] },
-  { key: 'reserved', label: '예약 완료', covers: ['reserved'] },
+  {
+    key: 'reserved',
+    label: '예약 완료',
+    covers: ['mine', 'reserved'],
+    pattern: `linear-gradient(45deg, ${SLOT_PALETTE.mine.background} 50%, ${SLOT_PALETTE.reserved.background} 50%)`,
+  },
   { key: 'past', label: '예약 불가', covers: ['past', 'closed'] },
 ];
 
