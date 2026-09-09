@@ -1,8 +1,11 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { useMyInfo } from '../../api/user.api';
-import { useLatestReservation } from '../../api/reservation.api';
+import {
+  useLatestReservation,
+  useUserReservation,
+} from '../../api/reservation.api';
 
 import MyPage from './MyPage';
 
@@ -11,6 +14,7 @@ jest.mock('../../api/user.api', () => ({
 }));
 jest.mock('../../api/reservation.api', () => ({
   useLatestReservation: jest.fn(),
+  useUserReservation: jest.fn(),
 }));
 
 const mockNavigate = jest.fn();
@@ -24,6 +28,12 @@ beforeEach(() => {
     data: { name: '홍길동', serial: '202512345', email: 'a@hufs.ac.kr' },
   });
   useLatestReservation.mockReturnValue({ data: [] });
+  useUserReservation.mockReturnValue({
+    data: [],
+    isPending: false,
+    isError: false,
+    refetch: jest.fn(),
+  });
 });
 
 describe('MyPage 문의 섹션', () => {
@@ -88,5 +98,112 @@ describe('MyPage 이용 안내', () => {
     render(<MyPage />);
 
     expect(screen.getByText('이용 안내')).toBeInTheDocument();
+  });
+});
+
+const attendedReservation = {
+  reservationId: 1,
+  reservationState: 'VISITED',
+  reservationStartTime: '2026-09-09T10:00:00+09:00',
+  reservationEndTime: '2026-09-09T12:30:00+09:00',
+};
+const usageRegion = () =>
+  screen.getByRole('region', { name: '세미나실 이용 기록' });
+
+describe('MyPage 이용 기록', () => {
+  it('내 정보 아래, 예약 관리 메뉴 위에서 출석한 예약의 합계를 보여준다', () => {
+    useUserReservation.mockReturnValue({
+      data: [
+        attendedReservation,
+        {
+          ...attendedReservation,
+          reservationId: 2,
+          reservationState: 'NOT_VISITED',
+        },
+      ],
+      isPending: false,
+      isError: false,
+    });
+    render(<MyPage />);
+
+    expect(usageRegion()).toHaveTextContent(/2\s*시간\s*30\s*분/);
+    expect(usageRegion()).toHaveTextContent('1회');
+    expect(usageRegion()).toHaveTextContent('출석한 예약 시간 기준');
+    expect(screen.queryByText('이번 학기')).toBeNull();
+    expect(
+      screen.getByText('홍길동').compareDocumentPosition(usageRegion()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      usageRegion().compareDocumentPosition(
+        screen.getByRole('button', { name: '내 QR코드' }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('첫 조회 중에는 0시간이나 첫 이용 전으로 잘못 표시하지 않는다', () => {
+    useUserReservation.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+    });
+    render(<MyPage />);
+    expect(within(usageRegion()).getByRole('status')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(usageRegion()).not.toHaveTextContent('0시간');
+    expect(screen.queryByText('첫 기록을 기다리고 있어요')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '내 QR코드' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/otp');
+  });
+
+  it('조회 실패는 기록 없음과 구분하고 카드에서 다시 시도할 수 있다', () => {
+    const refetch = jest.fn();
+    useUserReservation.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch,
+    });
+    render(<MyPage />);
+    expect(screen.queryByText('첫 기록을 기다리고 있어요')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '내 예약 조회' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/check');
+  });
+
+  it('재조회 실패 때 기존 합계와 횟수를 유지한다', () => {
+    const refetch = jest.fn();
+    useUserReservation.mockReturnValue({
+      data: [attendedReservation],
+      isPending: false,
+      isError: true,
+      refetch,
+    });
+    render(<MyPage />);
+    expect(usageRegion()).toHaveTextContent(/2\s*시간\s*30\s*분/);
+    expect(usageRegion()).toHaveTextContent('1회');
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('정상 조회한 출석 기록이 없을 때 첫 기록 안내를 보여준다', () => {
+    render(<MyPage />);
+    expect(usageRegion()).toHaveTextContent('첫 기록을 기다리고 있어요');
+    expect(usageRegion()).toHaveTextContent('출석한 예약 시간 기준');
+  });
+
+  it('유효하지 않은 출석 시각은 일부 합계나 빈 기록으로 표시하지 않는다', () => {
+    useUserReservation.mockReturnValue({
+      data: [{ ...attendedReservation, reservationEndTime: null }],
+      isPending: false,
+      isError: false,
+      refetch: jest.fn(),
+    });
+    render(<MyPage />);
+    expect(screen.queryByText('첫 기록을 기다리고 있어요')).toBeNull();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeVisible();
   });
 });
