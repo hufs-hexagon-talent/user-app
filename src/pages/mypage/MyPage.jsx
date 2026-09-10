@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../../assets/logo/logoCes.png';
 import { useMyInfo } from '../../api/user.api';
-import { useLatestReservation } from '../../api/reservation.api';
+import {
+  useLatestReservation,
+  useUserReservation,
+} from '../../api/reservation.api';
+import UsageSummaryCard from './UsageSummaryCard';
+import { summarizeUsage } from './usageSummary';
 import { format } from 'date-fns';
 import './MyPage.css';
 import useIsMobile from '../../hooks/useIsMobile';
@@ -16,6 +21,13 @@ const MyPage = () => {
   const isMobile = useIsMobile();
   const { data: me } = useMyInfo();
   const { data: latest } = useLatestReservation();
+  const {
+    data: reservations,
+    isPending: isUsagePending,
+    isError: isUsageError,
+    refetch: refetchUsage,
+  } = useUserReservation();
+  const usage = summarizeUsage(reservations);
   const department = '컴퓨터공학부';
 
   const [openEditModal, setOpenEditModal] = useState(false);
@@ -102,6 +114,15 @@ const MyPage = () => {
             </>
           )}
         </div>
+      </div>
+
+      <div className="mypage-usage">
+        <UsageSummaryCard
+          summary={usage}
+          isPending={isUsagePending}
+          isError={isUsageError || (!isUsagePending && usage === null)}
+          onRetry={refetchUsage}
+        />
       </div>
 
       {/* 메뉴 — 항목은 <button>. div onClick 은 키보드로 못 간다. */}

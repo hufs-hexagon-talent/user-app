@@ -17,6 +17,7 @@ import useTimeTableScroll from './useTimeTableScroll';
 
 const STICKY_COL_WIDTH = { xs: 52, md: 100 };
 const GRID_BORDER = '1px solid #B6B4B0';
+const HALF_HOUR_BORDER = '1px solid #D6D3CF';
 
 const ReservationTimeTable = ({
   rooms,
@@ -70,7 +71,9 @@ const ReservationTimeTable = ({
                     position: 'sticky',
                     left: 0,
                     zIndex: 3,
-                    backgroundColor: '#fff',
+                    // 처음에는 시작 시각이 경계 중앙에 온전히 보이게 한다.
+                    // 가로로 넘기면 고정 호실 열 뒤로 들어온 시간 라벨을 가린다.
+                    backgroundColor: edges.left ? '#fff' : 'transparent',
                     border: 'none',
                     padding: 0,
                     width: STICKY_COL_WIDTH,
@@ -88,24 +91,27 @@ const ReservationTimeTable = ({
                     sx={{
                       border: 'none',
                       position: 'relative',
-                      padding: { xs: '6px 0 8px 4px', md: '10px 0 10px 4px' },
+                      padding: { xs: '6px 0 8px', md: '10px 0' },
                       width: { xs: 44, md: 52 },
                       minWidth: { xs: 44, md: 52 },
                       fontSize: { xs: '10.5px', md: '12px' },
                       color: '#555',
                       whiteSpace: 'nowrap',
                       fontVariantNumeric: 'tabular-nums',
-                      '&::after': {
-                        content: '""',
-                        position: 'absolute',
-                        // 본문 경계는 앞 셀의 오른쪽 1px 테두리다. 눈금도 같은 픽셀에 붙인다.
-                        left: -1,
-                        bottom: -1,
-                        height: time.endsWith(':00') ? 6 : 3,
-                        borderLeft: GRID_BORDER,
-                      },
                     }}>
-                    {time.endsWith(':00') || timeIndex === 0 ? time : null}
+                    {(time.endsWith(':00') || timeIndex === 0) && (
+                      <Box
+                        component="span"
+                        sx={{
+                          display: 'inline-block',
+                          position: 'relative',
+                          // 시간은 칸 중앙이 아니라 시작 경계 위에 놓는다.
+                          left: '-0.5px',
+                          transform: 'translateX(-50%)',
+                        }}>
+                        {time}
+                      </Box>
+                    )}
                   </TableCell>
                 ))}
               </TableRow>
@@ -184,12 +190,18 @@ const ReservationTimeTable = ({
                           padding: 0,
                           width: { xs: 44, md: 52 },
                           minWidth: { xs: 44, md: 52 },
-                          height: { xs: 48, md: 53 },
+                          height: { xs: 56, md: 53 },
                           opacity: state.outOfExtendRange ? 0.4 : 1,
                           backgroundColor: palette.background,
                           backgroundImage: palette.pattern ?? 'none',
                           border: 'none',
-                          borderRight: GRID_BORDER,
+                          // 오른쪽 경계의 시각으로 구분해야 09:30 시작도 맞는다.
+                          // 표의 마지막 경계는 종료 시각에 관계없이 실선으로 닫는다.
+                          borderRight:
+                            times[timeIndex + 1].endsWith(':00') ||
+                            timeIndex === times.length - 2
+                              ? GRID_BORDER
+                              : HALF_HOUR_BORDER,
                           borderBottom: GRID_BORDER,
                           borderTop: i === 0 ? GRID_BORDER : 'none',
                           cursor: state.selectable ? 'pointer' : 'not-allowed',

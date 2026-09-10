@@ -68,6 +68,11 @@
     font-size: 1rem;
   }
 
+  #info > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   #menu {
     padding: 0 2rem;
     margin-bottom: 36px;
@@ -89,5 +94,22 @@
   #logo {
     width: 6rem;
     height: 6rem;
+  }
+}
+
+.mypage-usage {
+  margin: 0 6rem 2.5rem;
+  max-width: 640px;
+}
+
+@media (min-width: 769px) {
+  .mypage-usage {
+    max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .mypage-usage {
+    margin: 0 1.5rem 2rem;
   }
 }
