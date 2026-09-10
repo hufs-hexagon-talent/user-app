@@ -94,9 +94,7 @@ describe('예약 현황 재조회 실패', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       '최신 예약 현황을 못 받아왔습니다.',
     );
-    expect(
-      screen.queryByText('예약 현황을 불러오지 못했습니다.'),
-    ).toBeNull();
+    expect(screen.queryByText('예약 현황을 불러오지 못했습니다.')).toBeNull();
   });
 
   it('안내의 다시 시도는 재조회를 부른다', () => {
@@ -137,19 +135,33 @@ describe('예약 현황 재조회 실패', () => {
 });
 
 describe('예약 가능한 날짜 목록', () => {
+  it('빈 캐시를 가진 재조회 실패를 운영 일정 없음으로 안내하지 않는다', () => {
+    useReservations.mockReturnValue(query({ data: [], isError: true }));
+
+    render(<RoomPage />);
+
+    expect(
+      screen.getByText('예약 현황을 불러오지 못했습니다.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeEnabled();
+    expect(screen.queryByText(/세미나실을 운영하지 않아요/)).toBeNull();
+  });
+
   // 방학처럼 운영 일정이 0건이면 서버는 200 + 빈 목록을 준다(예외가 아니라 catch 를 안 탄다).
   // react-datepicker 는 includeDates=[] 를 "허용 날짜 0개" 로 읽어 35칸이 전부 잠기고
-  // 월 이동 화살표도 렌더하지 않는다. 그 옆에 "다른 날짜를 선택해 주세요" 가 떠 있었다.
-  it('목록이 비어 있으면 달력 제한을 풀고 사실대로 안내한다', async () => {
+  // 월 이동 화살표도 렌더하지 않는다. 빈 응답으로 달력을 통째로 잠그지 않는다.
+  it('목록이 비어 있어도 선택한 날짜의 미운영만 안내하고 달력 탐색을 유지한다', async () => {
     fetchDate.mockResolvedValueOnce([]);
     useReservations.mockReturnValue(query({ data: [] }));
 
     render(<RoomPage />);
 
     expect(
-      await screen.findByText(/지금은 예약할 수 있는 날짜가 없습니다/),
+      await screen.findByText('선택한 날짜에는 세미나실을 운영하지 않아요'),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/다른 날짜를 선택해 주세요/)).toBeNull();
+    expect(
+      screen.getByText('달력에서 다른 날짜를 확인해 주세요.'),
+    ).toBeInTheDocument();
     const props = mockDatePickerProps.mock.calls.at(-1)[0];
     expect(props.includeDates).toBeNull();
     expect(props.showDisabledMonthNavigation).toBe(true);
@@ -166,7 +178,7 @@ describe('예약 가능한 날짜 목록', () => {
       expect(mockDatePickerProps.mock.calls.at(-1)[0].includeDates).toBe(dates),
     );
     expect(
-      screen.getByText(/선택한 날짜에는 예약할 수 있는 방이 없습니다/),
+      screen.getByText('선택한 날짜에는 세미나실을 운영하지 않아요'),
     ).toBeInTheDocument();
   });
 

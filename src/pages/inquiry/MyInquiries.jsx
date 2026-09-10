@@ -5,6 +5,7 @@ import { Button } from 'flowbite-react';
 import { ChevronRight } from 'lucide-react';
 
 import { useMyInquiries } from '../../api/inquiry.api';
+import BooEmptyState from '../../components/BooEmptyState';
 
 import { CATEGORY_LABELS, STATUS_LABELS } from './inquiryLabels';
 import InquiryHistoryDrawer from './InquiryHistoryDrawer';
@@ -234,10 +235,12 @@ const MyInquiries = () => {
 
       {queryNotice}
 
-      {hasList && list.length === 0 && (
-        <div className="text-center text-gray-500 py-16">
-          접수한 문의가 없습니다.
-        </div>
+      {hasList && !isError && list.length === 0 && (
+        <BooEmptyState
+          illustration="inquiry"
+          title="접수한 문의가 없습니다."
+          description="출석 문제나 이용 중 불편한 점은 문의하기로 알려 주세요."
+        />
       )}
 
       {/* 최근 문의는 바로 보여주고, 오래된 이력은 같은 구획의 전체 보기로 이어진다. */}
@@ -300,6 +303,7 @@ const MyInquiries = () => {
         openInquiries={open}
         resolvedInquiries={resolved}
         hasList={hasList}
+        showEmptyState={!isError || list.length > 0}
         notice={queryNotice}
         renderRow={inquiry => renderRow(inquiry, true)}
       />

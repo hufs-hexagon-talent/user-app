@@ -188,15 +188,24 @@ describe('ReservationPickerModal 구획', () => {
   });
 
   it('출석 유형이어도 대상이 0건이면 구획 없이 안내만 보인다', () => {
-    renderPicker({ reservations: [VISITED, UPCOMING] });
+    const { props } = renderPicker({ reservations: [VISITED, UPCOMING] });
 
     expect(screen.getByText(PICKER_NO_DISPUTABLE_MESSAGE)).toBeInTheDocument();
+    expect(
+      screen.getByText('아래 예약 중 문의할 내역을 선택해 주세요.'),
+    ).toBeVisible();
+    expect(screen.queryByText(PICKER_EMPTY_MESSAGE)).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', {
         name: new RegExp(DISPUTABLE_SECTION_TITLE),
       }),
     ).toBeNull();
     expect(cardButtons()).toHaveLength(2);
+    expect(screen.getByRole('button', { name: NAME_VISITED })).toBeEnabled();
+    expect(screen.getByRole('button', { name: NAME_UPCOMING })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: NAME_VISITED }));
+    expect(props.onPick).toHaveBeenCalledWith(VISITED);
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
   // 수정 모드에서 출석한 예약이 연결된 문의를 열어도 선택 카드가 그대로 보여야 한다.
@@ -257,8 +266,12 @@ describe('ReservationPickerModal 날짜 그룹·더 보기', () => {
       reservationStartTime: `2026-07-${String(i + 1).padStart(2, '0')}T10:00:00`,
       reservationEndTime: `2026-07-${String(i + 1).padStart(2, '0')}T11:00:00`,
     }));
-    renderPicker({ reservations: many, category: 'ETC' });
+    renderPicker({ reservations: many, category: 'ATTENDANCE' });
 
+    expect(screen.getByText(PICKER_NO_DISPUTABLE_MESSAGE)).toBeVisible();
+    expect(
+      screen.getByText('아래 예약 중 문의할 내역을 선택해 주세요.'),
+    ).toBeVisible();
     expect(cardButtons()).toHaveLength(INITIAL_LIMIT);
     fireEvent.click(
       screen.getByRole('button', { name: `더 보기 (${MORE_STEP}건)` }),
@@ -363,22 +376,45 @@ describe('ReservationPickerModal 상태', () => {
 
     expect(screen.getByText(PICKER_LOADING_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /더 보기/ })).toBeNull();
+    expect(screen.queryByText(PICKER_EMPTY_MESSAGE)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(PICKER_EMPTY_ATTENDANCE_HINT),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(PICKER_NO_DISPUTABLE_MESSAGE),
+    ).not.toBeInTheDocument();
   });
 
-  it('데이터가 없고 실패하면 실패 문구와 다시 시도를 보여준다', () => {
-    const { props } = renderPicker({ reservations: undefined, isError: true });
+  it.each([
+    ['데이터가 없고', undefined],
+    ['빈 캐시만 있고', []],
+  ])(
+    '%s 실패하면 빈 상태 없이 실패 문구와 다시 시도를 보여준다',
+    (_, reservations) => {
+      const { props } = renderPicker({ reservations, isError: true });
 
-    expect(screen.getByText(PICKER_ERROR_MESSAGE)).toBeInTheDocument();
-    props.refetch.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
-    expect(props.refetch).toHaveBeenCalledTimes(1);
-  });
+      expect(screen.getByText(PICKER_ERROR_MESSAGE)).toBeInTheDocument();
+      expect(screen.queryByText(PICKER_EMPTY_MESSAGE)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(PICKER_EMPTY_ATTENDANCE_HINT),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(PICKER_NO_DISPUTABLE_MESSAGE),
+      ).not.toBeInTheDocument();
+      props.refetch.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+      expect(props.refetch).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('실패했어도 캐시 목록이 있으면 목록을 그리고 배너만 얹는다', () => {
     const { props } = renderPicker({ isError: true });
 
     expect(cardButtons()).toHaveLength(4);
     expect(screen.getByText(PICKER_STALE_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText(PICKER_EMPTY_MESSAGE)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: NAME_VISITED })).toBeEnabled();
+    expect(screen.getByRole('button', { name: NAME_UPCOMING })).toBeEnabled();
     props.refetch.mockClear();
     const retry = screen.getByRole('button', { name: '다시 시도' });
     expect(retry).toHaveClass('min-h-[44px]');
@@ -405,5 +441,8 @@ describe('ReservationPickerModal 상태', () => {
     renderPicker({ reservations: [], category: 'ETC' });
     expect(screen.getByText(PICKER_EMPTY_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByText(PICKER_EMPTY_ATTENDANCE_HINT)).toBeNull();
+    expect(
+      screen.getByText('예약을 연결하지 않고도 문의를 접수할 수 있어요.'),
+    ).toBeVisible();
   });
 });
