@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from 'flowbite-react';
 
 import { modalTheme } from '../../components/modal/modalTheme';
+import BooEmptyState from '../../components/BooEmptyState';
 
 import { retryState } from './inquiryView';
 import ReservationCard from './ReservationCard';
@@ -176,9 +177,11 @@ const ReservationPickerModal = ({
         )}
         {/* 출석 이의인데 대상이 하나도 없으면 왜 안 보이는지 알려 준다. 구획은 그리지 않는다. */}
         {disputable.length === 0 && category === 'ATTENDANCE' && (
-          <p className="mb-3 text-sm text-gray-600 break-keep">
-            {PICKER_NO_DISPUTABLE_MESSAGE}
-          </p>
+          <BooEmptyState
+            variant="inline"
+            title={PICKER_NO_DISPUTABLE_MESSAGE}
+            description="아래 예약 중 문의할 내역을 선택해 주세요."
+          />
         )}
         {hasSections ? (
           <div className="space-y-4">
@@ -239,12 +242,16 @@ const ReservationPickerModal = ({
     );
   } else {
     body = (
-      <div className="py-6 text-center text-sm text-gray-500 break-keep">
-        <p>{PICKER_EMPTY_MESSAGE}</p>
-        {category === 'ATTENDANCE' && (
-          <p className="mt-2">{PICKER_EMPTY_ATTENDANCE_HINT}</p>
-        )}
-      </div>
+      <BooEmptyState
+        variant="compact"
+        illustration="reservation"
+        title={PICKER_EMPTY_MESSAGE}
+        description={
+          category === 'ATTENDANCE'
+            ? PICKER_EMPTY_ATTENDANCE_HINT
+            : '예약을 연결하지 않고도 문의를 접수할 수 있어요.'
+        }
+      />
     );
   }
 

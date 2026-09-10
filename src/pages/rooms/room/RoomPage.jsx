@@ -20,7 +20,6 @@ import Banner from '../../admin/banner/Banner';
 import { ko } from 'date-fns/locale';
 import { useSnackbar } from 'react-simple-snackbar';
 import 'react-datepicker/dist/react-datepicker.css';
-import { CalendarX2 } from 'lucide-react';
 import { fetchDate } from '../../../api/policySchedule.api';
 import { useReservations, useReserve } from '../../../api/reservation.api';
 import useUrlQuery from '../../../hooks/useUrlQuery';
@@ -45,6 +44,7 @@ import { Modal } from 'flowbite-react';
 import { durationLabel } from './durationLabel';
 import { shortDateLabel } from './dateLabel';
 import { modalTheme } from '../../../components/modal/modalTheme';
+import BooEmptyState from '../../../components/BooEmptyState';
 
 // 취소·예약 버튼(flowbite Button, node_modules/flowbite-react/dist/esm/components/Button/theme.mjs)
 // 의 색은 theme.color 를 통째로 바꾼다 — className 으로 hover 색만 덧붙이면 theme.color.light/
@@ -95,9 +95,6 @@ const RoomPage = () => {
   // 빈 배열을 그대로 includeDates 에 주면 react-datepicker 가 "허용 날짜 0개" 로 읽어
   // 35칸이 전부 잠기고 월 이동 화살표까지 사라져 학생이 아무것도 할 수 없다.
   const [availableDate, setAvailableDate] = useState(null);
-  // 서버가 200 + 빈 목록을 준 경우(방학처럼 운영 일정이 0건). 오류가 아니라 catch 를 안 탄다.
-  // 이때 "다른 날짜를 선택해 주세요" 는 지킬 수 없는 지시라 안내를 사실대로 바꾼다.
-  const [noAvailableDates, setNoAvailableDates] = useState(false);
   const [earliestStartTime, setEarliestStartTime] = useState(null);
   const [startHour, setStartHour] = useState(null);
   const [startMinute, setStartMinute] = useState(null);
@@ -475,7 +472,6 @@ const RoomPage = () => {
         const dates = await fetchDate(departmentId);
         const hasDates = Array.isArray(dates) && dates.length > 0;
         setAvailableDate(hasDates ? dates : null);
-        setNoAvailableDates(!hasDates);
       } catch {
         // 목록이 비어 있으면 달력의 모든 날짜가 잠기므로 제한을 풀고 안내한다
         setAvailableDate(null);
@@ -552,7 +548,7 @@ const RoomPage = () => {
             예약 현황을 불러오는 중입니다.
           </div>
         )}
-        {!isReservationsPending && !hasReservationData && isReservationsError && (
+        {!isReservationsPending && !hasRooms && isReservationsError && (
           <div className="text-center mx-8 md:mx-12 lg:mx-96 py-12 my-12 rounded-lg bg-gray-100 text-gray-900">
             예약 현황을 불러오지 못했습니다.
             <div className="mt-4 flex justify-center">
@@ -577,19 +573,15 @@ const RoomPage = () => {
             />
           </div>
         )}
-        {hasReservationData && !hasRooms && (
-          <div className="text-center mx-8 md:mx-12 lg:mx-96 py-12 my-12 rounded-lg bg-gray-100 text-gray-900">
-            {noAvailableDates ? (
-              <>
-                지금은 예약할 수 있는 날짜가 없습니다. <br />
-                운영 일정이 등록되면 예약할 수 있습니다.
-              </>
-            ) : (
-              <>
-                선택한 날짜에는 예약할 수 있는 방이 없습니다. <br />
-                다른 날짜를 선택해 주세요.
-              </>
-            )}
+        {hasReservationData && !hasRooms && !isReservationsError && (
+          <div className="mx-3 my-8 min-[900px]:mx-6">
+            <div className="mx-auto max-w-2xl">
+              <BooEmptyState
+                illustration="rest"
+                title="선택한 날짜에는 세미나실을 운영하지 않아요"
+                description="달력에서 다른 날짜를 확인해 주세요."
+              />
+            </div>
           </div>
         )}
         {hasRooms && (
