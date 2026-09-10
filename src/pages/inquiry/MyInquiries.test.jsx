@@ -302,6 +302,11 @@ describe('MyInquiries', () => {
     render(<MyInquiries />);
 
     expect(screen.getByText('접수한 문의가 없습니다.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '출석 문제나 이용 중 불편한 점은 문의하기로 알려 주세요.',
+      ),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '문의하기' }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/inquiry/new');
@@ -316,6 +321,14 @@ describe('MyInquiries', () => {
     expect(
       screen.getByText('문의 목록을 불러오지 못했습니다.'),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText('접수한 문의가 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        '출석 문제나 이용 중 불편한 점은 문의하기로 알려 주세요.',
+      ),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(refetch).toHaveBeenCalledTimes(1);
 
@@ -331,9 +344,33 @@ describe('MyInquiries', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent(STALE_MESSAGE);
     expect(screen.getByText(RESOLVED_INQUIRY.content)).toBeInTheDocument();
+    expect(screen.getByText(OPEN_INQUIRY.content)).toBeInTheDocument();
     expect(screen.queryByText('문의 목록을 불러오지 못했습니다.')).toBeNull();
+    expect(
+      screen.queryByText('접수한 문의가 없습니다.'),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('빈 캐시의 갱신이 실패하면 정상 빈 목록 안내 없이 재시도와 문의하기를 제공한다', () => {
+    const refetch = jest.fn();
+    mockList([], { isError: true, refetch });
+    render(<MyInquiries />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(STALE_MESSAGE);
+    expect(
+      screen.queryByText('접수한 문의가 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        '출석 문제나 이용 중 불편한 점은 문의하기로 알려 주세요.',
+      ),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '문의하기' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/inquiry/new');
   });
 
   // 다시 시도를 눌러도 화면이 안 바뀌면 고장으로 보고 연타한다. 진행 중에는 잠그고 알린다.
@@ -363,6 +400,14 @@ describe('MyInquiries', () => {
     expect(
       screen.getByText('문의 목록을 불러오는 중입니다.'),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText('접수한 문의가 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        '출석 문제나 이용 중 불편한 점은 문의하기로 알려 주세요.',
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '문의하기' }),
     ).toBeInTheDocument();
@@ -493,11 +538,21 @@ describe('MyInquiries 전체 이력', () => {
   });
 
   it.each([
-    ['답변 대기', OPEN_HISTORY, '답변 완료'],
-    ['답변 완료', RESOLVED_HISTORY, '답변 대기'],
+    [
+      '답변 대기',
+      OPEN_HISTORY,
+      '답변 완료',
+      '답변이 도착하면 여기에서 다시 확인할 수 있어요.',
+    ],
+    [
+      '답변 완료',
+      RESOLVED_HISTORY,
+      '답변 대기',
+      '답변을 기다리는 문의가 생기면 여기에 모아 둘게요.',
+    ],
   ])(
     '%s만 있을 때 다른 구획의 0건 탭에서도 빈 목록 안내를 읽을 수 있다',
-    async (label, inquiries, emptyLabel) => {
+    async (label, inquiries, emptyLabel, description) => {
       const user = userEvent.setup();
       mockList(inquiries);
       render(<MyInquiries />);
@@ -516,9 +571,106 @@ describe('MyInquiries 전체 이력', () => {
       expect(
         within(panel).getByText(`${emptyLabel} 문의가 없습니다.`),
       ).toBeVisible();
+      expect(within(panel).getByText(description)).toBeVisible();
       expect(within(panel).queryByRole('list')).not.toBeInTheDocument();
     },
   );
+
+  it.each([
+    [
+      '답변 대기',
+      OPEN_HISTORY,
+      '답변 완료',
+      '답변이 도착하면 여기에서 다시 확인할 수 있어요.',
+    ],
+    [
+      '답변 완료',
+      RESOLVED_HISTORY,
+      '답변 대기',
+      '답변을 기다리는 문의가 생기면 여기에 모아 둘게요.',
+    ],
+  ])(
+    '갱신 실패 중에도 %s 캐시가 있으면 다른 0건 구획의 안내와 기존 목록을 유지한다',
+    async (label, inquiries, emptyLabel, description) => {
+      const user = userEvent.setup();
+      mockList(inquiries, { isError: true });
+      render(<MyInquiries />);
+      await user.click(
+        screen.getByRole('button', { name: `${label} 전체 보기` }),
+      );
+
+      const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+      await user.click(
+        within(dialog).getByRole('tab', { name: `${emptyLabel} 0건` }),
+      );
+
+      const emptyPanel = within(dialog).getByRole('tabpanel', {
+        name: `${emptyLabel} 0건`,
+      });
+      expect(
+        within(emptyPanel).getByText(`${emptyLabel} 문의가 없습니다.`),
+      ).toBeVisible();
+      expect(within(emptyPanel).getByText(description)).toBeVisible();
+      expect(within(emptyPanel).getByRole('status')).toHaveTextContent(
+        STALE_MESSAGE,
+      );
+
+      await user.click(
+        within(dialog).getByRole('tab', { name: `${label} 5건` }),
+      );
+
+      expect(within(dialog).getAllByRole('listitem')).toHaveLength(5);
+      expect(
+        within(dialog).queryByText(`${emptyLabel} 문의가 없습니다.`),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it('열린 이력의 전체 캐시가 비어 있고 갱신에 실패하면 정상 빈 안내를 숨겼다가 성공 후 다시 보여준다', async () => {
+    const user = userEvent.setup();
+    const refetch = jest.fn();
+    mockList(OPEN_HISTORY, { refetch });
+    const { container, rerender } = render(<MyInquiries />);
+    await user.click(
+      screen.getByRole('button', { name: '답변 대기 전체 보기' }),
+    );
+
+    mockList([], { isError: true, refetch });
+    rerender(<MyInquiries />);
+
+    const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+    expect(within(dialog).getByRole('status')).toHaveTextContent(STALE_MESSAGE);
+    expect(
+      screen.queryByText('접수한 문의가 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByText('답변 대기 문의가 없습니다.'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByText(
+        '답변을 기다리는 문의가 생기면 여기에 모아 둘게요.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('list')).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+
+    mockList([], { refetch });
+    rerender(<MyInquiries />);
+
+    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByText('답변 대기 문의가 없습니다.'),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByText(
+        '답변을 기다리는 문의가 생기면 여기에 모아 둘게요.',
+      ),
+    ).toBeVisible();
+    expect(
+      within(container).getByText('접수한 문의가 없습니다.'),
+    ).toBeInTheDocument();
+  });
 
   it.each(['닫기 버튼', 'Escape', '배경'])(
     '%s으로 전체 이력을 닫으면 열기 버튼으로 포커스가 돌아온다',

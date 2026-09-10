@@ -107,7 +107,7 @@ describe('예약 목록', () => {
     renderCheck();
 
     expect(screen.getByText('예약 목록을 불러오는 중입니다.')).toBeVisible();
-    expect(screen.queryByText('예약 내역이 없습니다.')).toBeNull();
+    expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
   });
 
   test('조회에 실패하면 빈 목록이 아니라 실패 문구와 다시 시도를 보여준다', () => {
@@ -116,7 +116,7 @@ describe('예약 목록', () => {
     renderCheck();
 
     expect(screen.getByText('예약 목록을 불러오지 못했습니다.')).toBeVisible();
-    expect(screen.queryByText('예약 내역이 없습니다.')).toBeNull();
+    expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(query.refetch).toHaveBeenCalledTimes(1);
@@ -144,10 +144,30 @@ describe('예약 목록', () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
-  test('예약이 없으면 없음 문구를 보여준다', () => {
+  test('정상 조회한 예약이 없으면 표 대신 예약 현황으로 가는 안내를 보여준다', () => {
     renderCheck();
 
-    expect(screen.getByText('예약 내역이 없습니다.')).toBeVisible();
+    expect(screen.getByText('아직 예약 내역이 없어요')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: '예약 현황 보기' }),
+    ).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByRole('button', { name: '내 노쇼 현황' })).toBeVisible();
+  });
+
+  test('빈 목록 캐시의 재조회가 실패하면 예약 없음 대신 오류와 재시도를 보여준다', () => {
+    const refetch = jest.fn();
+    useUserReservation.mockReturnValue({
+      ...loaded([]),
+      isError: true,
+      refetch,
+    });
+    renderCheck();
+
+    expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
+    expect(screen.getByText('예약 목록을 불러오지 못했습니다.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   test('예약이 있으면 목록을 보여준다', () => {
@@ -155,7 +175,7 @@ describe('예약 목록', () => {
     renderCheck();
 
     expect(screen.getByText('세미나실-1')).toBeVisible();
-    expect(screen.queryByText('예약 내역이 없습니다.')).toBeNull();
+    expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
   });
 
   test('마지막 페이지의 예약이 사라지면 남은 페이지를 보여준다', () => {
@@ -320,6 +340,7 @@ describe('내 노쇼 현황 팝오버', () => {
 
     expect(screen.getByText('노쇼 현황을 불러오는 중입니다.')).toBeVisible();
     expect(screen.queryByText(/undefined/)).toBeNull();
+    expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
   });
 
   test('노쇼 횟수 조회에 실패하면 실패 문구와 다시 시도를 보여준다', () => {
@@ -330,9 +351,44 @@ describe('내 노쇼 현황 팝오버', () => {
 
     expect(screen.getByText('노쇼 현황을 불러오지 못했습니다.')).toBeVisible();
     expect(screen.queryByText(/undefined/)).toBeNull();
+    expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(query.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('정상 0건과 빈 예약 배열이면 빈 표 대신 안내를 보이고 제한 설명은 유지한다', () => {
+    useNoShow.mockReturnValue(loaded(noShowOf(0)));
+    renderCheck();
+    openNoShowPopover();
+
+    expect(screen.getByText('미출석 예약이 없어요')).toBeVisible();
+    expect(screen.getByText(/방문하지 않은 횟수는 0번 입니다/)).toBeVisible();
+    expect(screen.getByText(/노쇼가 4회가 되면/)).toBeVisible();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  test('노쇼 0건이어도 예약 배열이 없거나 형식이 잘못되면 없음으로 단정하지 않는다', () => {
+    useNoShow.mockReturnValue(loaded({ noShowCount: 0 }));
+    const { rerender } = renderCheck();
+    openNoShowPopover();
+    expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
+
+    useNoShow.mockReturnValue(loaded(noShowOf(0, {})));
+    rerender(
+      <MemoryRouter>
+        <Check />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
+
+    useNoShow.mockReturnValue(loaded(noShowOf(1)));
+    rerender(
+      <MemoryRouter>
+        <Check />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
   });
 
   test('제한 기간 조회에 실패하면 그 사실을 알린다', () => {

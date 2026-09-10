@@ -2,6 +2,8 @@ import React, { useEffect, useId, useRef } from 'react';
 import { Drawer, IconButton, Tab, Tabs } from '@mui/material';
 import { X } from 'lucide-react';
 
+import BooEmptyState from '../../components/BooEmptyState';
+
 const InquiryHistoryDrawer = ({
   open,
   status,
@@ -10,6 +12,7 @@ const InquiryHistoryDrawer = ({
   openInquiries,
   resolvedInquiries,
   hasList,
+  showEmptyState,
   notice,
   renderRow,
 }) => {
@@ -90,11 +93,18 @@ const InquiryHistoryDrawer = ({
                 {hasList &&
                   (inquiries.length > 0 ? (
                     <ul className="space-y-3">{inquiries.map(renderRow)}</ul>
-                  ) : (
-                    <p className="py-12 text-center text-sm text-gray-500">
-                      {label} 문의가 없습니다.
-                    </p>
-                  ))}
+                  ) : showEmptyState ? (
+                    <BooEmptyState
+                      variant="compact"
+                      illustration="inquiry"
+                      title={`${label} 문의가 없습니다.`}
+                      description={
+                        panelStatus === 'RESOLVED'
+                          ? '답변이 도착하면 여기에서 다시 확인할 수 있어요.'
+                          : '답변을 기다리는 문의가 생기면 여기에 모아 둘게요.'
+                      }
+                    />
+                  ) : null)}
               </>
             )}
           </div>

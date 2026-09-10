@@ -18,6 +18,7 @@ import {
   useUserReservation,
 } from '../../api/reservation.api';
 import { useMyInfo, useBlockedPeriod } from '../../api/user.api';
+import BooEmptyState from '../../components/BooEmptyState';
 import { useCustomSnackbars } from '../../components/snackbar/SnackBar';
 import {
   formatReservationTime,
@@ -135,6 +136,13 @@ const Check = () => {
   const isReservationsLoaded =
     !isReservationsPending && Array.isArray(reservations);
   const hasReservations = isReservationsLoaded && reservations.length > 0;
+  const isReservationsEmpty =
+    isReservationsLoaded && !hasReservations && !isReservationsError;
+  const noShowReservations = noShow?.reservationList?.reservationInfoResponses;
+  const isNoShowEmpty =
+    noShow?.noShowCount === 0 &&
+    Array.isArray(noShowReservations) &&
+    noShowReservations.length === 0;
 
   // 문제를 보고 있는 화면에서 바로 이의를 시작하게 한다 — 폼이 예약을 확정한 채로 열린다.
   const actionLinkClass =
@@ -168,7 +176,10 @@ const Check = () => {
           role="status"
           aria-live="polite"
           className="mx-4 mt-10 -mb-6 flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
-          <span>최신 예약 목록을 못 받아왔습니다. 표시된 내용이 실제와 다를 수 있습니다.</span>
+          <span>
+            최신 예약 목록을 못 받아왔습니다. 표시된 내용이 실제와 다를 수
+            있습니다.
+          </span>
           <button
             type="button"
             onClick={() => refetchReservations()}
@@ -177,128 +188,140 @@ const Check = () => {
           </button>
         </div>
       )}
-      <div id="table" className="overflow-x-auto mt-10">
-        <Table className="border">
-          <Table.Head
-            style={{ fontSize: 15 }}
-            className="text-black text-center">
-            <Table.HeadCell className="px-2 py-4">출석 여부</Table.HeadCell>
-            <Table.HeadCell className="px-2 py-4">호실</Table.HeadCell>
-            <Table.HeadCell className="px-2 py-4">날짜</Table.HeadCell>
-            <Table.HeadCell className="px-2 py-4">시작 시간</Table.HeadCell>
-            <Table.HeadCell className="px-2 py-4">종료 시간</Table.HeadCell>
-            <Table.HeadCell className="px-2 py-4">
-              <span className="sr-only">관리</span>
-            </Table.HeadCell>
-          </Table.Head>
-          <Table.Body className="divide-y">
-            {isReservationsPending && (
-              <Table.Row className="bg-white text-center text-gray-900">
-                <Table.Cell colSpan={6} className="px-2 py-8">
-                  예약 목록을 불러오는 중입니다.
-                </Table.Cell>
-              </Table.Row>
-            )}
-            {!isReservationsPending &&
-              !isReservationsLoaded &&
-              isReservationsError && (
-              <Table.Row className="bg-white text-center text-gray-900">
-                <Table.Cell colSpan={6} className="px-2 py-8">
-                  예약 목록을 불러오지 못했습니다.
-                  <div className="mt-4 flex justify-center">
-                    <Button
-                      size="sm"
-                      color="dark"
-                      onClick={() => refetchReservations()}>
-                      다시 시도
-                    </Button>
-                  </div>
-                </Table.Cell>
-              </Table.Row>
-            )}
-            {isReservationsLoaded && !hasReservations && (
-              <Table.Row className="bg-white text-center text-gray-900">
-                <Table.Cell colSpan={6} className="px-2 py-8">
-                  예약 내역이 없습니다.
-                </Table.Cell>
-              </Table.Row>
-            )}
-            {hasReservations &&
-              paginatedReservations.map((reservation, index) => {
-                const start = new Date(reservation.reservationStartTime);
-                const end = new Date(reservation.reservationEndTime);
-                const isPast = start < new Date();
-                return (
-                  <Table.Row
-                    key={index}
-                    className="bg-white dark:border-gray-700 dark:bg-gray-800 text-center text-gray-900">
-                    <Table.Cell className="whitespace-nowrap px-2 py-4">
-                      {reservationStateLabel(reservation) === '처리됨' ? (
-                        <Tooltip
-                          title={
-                            <Typography sx={{ fontSize: '1.2em' }}>
-                              노쇼가 4회가 되어 예약이 제한된 뒤, 제한 기간이
-                              끝나 노쇼 횟수에서 빠진 예약입니다.
-                            </Typography>
-                          }>
-                          <span>처리됨</span>
-                        </Tooltip>
-                      ) : (
-                        reservationStateLabel(reservation)
-                      )}
-                    </Table.Cell>
-                    <Table.Cell className="px-2 py-4">
-                      {formatRoom(reservation)}
-                    </Table.Cell>
-                    <Table.Cell className="px-2 py-4">
-                      {format(start, 'MM-dd')}
-                    </Table.Cell>
-                    <Table.Cell className="px-2 py-4">
-                      {format(start, 'HH:mm')}
-                    </Table.Cell>
-                    <Table.Cell className="px-2 py-4">
-                      {format(end, 'HH:mm')}
-                    </Table.Cell>
-                    <Table.Cell className="px-2 py-1">
-                      {/* 44px 클릭 영역은 유지하고 여백을 줄여 기존 출석 행 높이에 맞춘다. */}
-                      <div className="flex min-h-[44px] items-center justify-center whitespace-nowrap">
-                        {/* 지난 미출석·처리됨은 문의로, 앞으로의 예약은 삭제로. 삭제 조건은 현행 그대로 —
-                            시작 15분 전 체크인으로 VISITED 인데 아직 시작 전인 행이 있다. */}
-                        {isDisputable(reservation)
-                          ? renderInquiryLink(reservation)
-                          : !(
-                              isPast ||
-                              reservation.reservationState === 'VISITED'
-                            ) && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenModal(reservation.reservationId);
-                                }}
-                                // 앱에서 예약을 취소하는 유일한 경로. 글자 높이(20px)만 눌리던 것을
-                                // 같은 자리의 문의 링크와 같은 44px 로 맞춘다. 접근 이름에 시각·호실을
-                                // 넣어 여러 행이 전부 "삭제" 로 읽히지 않게 한다.
-                                aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 예약 취소`}
-                                className="inline-flex min-h-[44px] items-center px-2 font-medium text-red-600 hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]">
-                                삭제
-                              </button>
-                            )}
+      {isReservationsEmpty ? (
+        <div className="mx-4 mt-10">
+          <div className="mx-auto max-w-2xl">
+            <BooEmptyState
+              illustration="reservation"
+              title="아직 예약 내역이 없어요"
+              description="예약 현황에서 이용할 시간을 골라 보세요."
+              action={
+                <Link to="/" className="boo-empty-state__action">
+                  예약 현황 보기
+                </Link>
+              }
+            />
+          </div>
+        </div>
+      ) : (
+        <div id="table" className="overflow-x-auto mt-10">
+          <Table className="border">
+            <Table.Head
+              style={{ fontSize: 15 }}
+              className="text-black text-center">
+              <Table.HeadCell className="px-2 py-4">출석 여부</Table.HeadCell>
+              <Table.HeadCell className="px-2 py-4">호실</Table.HeadCell>
+              <Table.HeadCell className="px-2 py-4">날짜</Table.HeadCell>
+              <Table.HeadCell className="px-2 py-4">시작 시간</Table.HeadCell>
+              <Table.HeadCell className="px-2 py-4">종료 시간</Table.HeadCell>
+              <Table.HeadCell className="px-2 py-4">
+                <span className="sr-only">관리</span>
+              </Table.HeadCell>
+            </Table.Head>
+            <Table.Body className="divide-y">
+              {isReservationsPending && (
+                <Table.Row className="bg-white text-center text-gray-900">
+                  <Table.Cell colSpan={6} className="px-2 py-8">
+                    예약 목록을 불러오는 중입니다.
+                  </Table.Cell>
+                </Table.Row>
+              )}
+              {!isReservationsPending &&
+                !hasReservations &&
+                isReservationsError && (
+                  <Table.Row className="bg-white text-center text-gray-900">
+                    <Table.Cell colSpan={6} className="px-2 py-8">
+                      예약 목록을 불러오지 못했습니다.
+                      <div className="mt-4 flex justify-center">
+                        <Button
+                          size="sm"
+                          color="dark"
+                          onClick={() => refetchReservations()}>
+                          다시 시도
+                        </Button>
                       </div>
                     </Table.Cell>
                   </Table.Row>
-                );
-              })}
-          </Table.Body>
-        </Table>
-      </div>
+                )}
+              {hasReservations &&
+                paginatedReservations.map((reservation, index) => {
+                  const start = new Date(reservation.reservationStartTime);
+                  const end = new Date(reservation.reservationEndTime);
+                  const isPast = start < new Date();
+                  return (
+                    <Table.Row
+                      key={index}
+                      className="bg-white dark:border-gray-700 dark:bg-gray-800 text-center text-gray-900">
+                      <Table.Cell className="whitespace-nowrap px-2 py-4">
+                        {reservationStateLabel(reservation) === '처리됨' ? (
+                          <Tooltip
+                            title={
+                              <Typography sx={{ fontSize: '1.2em' }}>
+                                노쇼가 4회가 되어 예약이 제한된 뒤, 제한 기간이
+                                끝나 노쇼 횟수에서 빠진 예약입니다.
+                              </Typography>
+                            }>
+                            <span>처리됨</span>
+                          </Tooltip>
+                        ) : (
+                          reservationStateLabel(reservation)
+                        )}
+                      </Table.Cell>
+                      <Table.Cell className="px-2 py-4">
+                        {formatRoom(reservation)}
+                      </Table.Cell>
+                      <Table.Cell className="px-2 py-4">
+                        {format(start, 'MM-dd')}
+                      </Table.Cell>
+                      <Table.Cell className="px-2 py-4">
+                        {format(start, 'HH:mm')}
+                      </Table.Cell>
+                      <Table.Cell className="px-2 py-4">
+                        {format(end, 'HH:mm')}
+                      </Table.Cell>
+                      <Table.Cell className="px-2 py-1">
+                        {/* 44px 클릭 영역은 유지하고 여백을 줄여 기존 출석 행 높이에 맞춘다. */}
+                        <div className="flex min-h-[44px] items-center justify-center whitespace-nowrap">
+                          {/* 지난 미출석·처리됨은 문의로, 앞으로의 예약은 삭제로. 삭제 조건은 현행 그대로 —
+                            시작 15분 전 체크인으로 VISITED 인데 아직 시작 전인 행이 있다. */}
+                          {isDisputable(reservation)
+                            ? renderInquiryLink(reservation)
+                            : !(
+                                isPast ||
+                                reservation.reservationState === 'VISITED'
+                              ) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenModal(reservation.reservationId);
+                                  }}
+                                  // 앱에서 예약을 취소하는 유일한 경로. 글자 높이(20px)만 눌리던 것을
+                                  // 같은 자리의 문의 링크와 같은 44px 로 맞춘다. 접근 이름에 시각·호실을
+                                  // 넣어 여러 행이 전부 "삭제" 로 읽히지 않게 한다.
+                                  aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 예약 취소`}
+                                  className="inline-flex min-h-[44px] items-center px-2 font-medium text-red-600 hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002D56]">
+                                  삭제
+                                </button>
+                              )}
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
+            </Table.Body>
+          </Table>
+        </div>
+      )}
 
-      <Pagination
-        count={pageCount} // 안전한 pageCount 값을 전달합니다.
-        page={safePage}
-        onChange={handlePageChange}
-        shape="rounded"
-        className="flex justify-center mt-4"
-      />
+      {!isReservationsEmpty && (
+        <Pagination
+          count={pageCount} // 안전한 pageCount 값을 전달합니다.
+          page={safePage}
+          onChange={handlePageChange}
+          shape="rounded"
+          className="flex justify-center mt-4"
+        />
+      )}
 
       <div id="popover" className="mt-6">
         <MuiButton
@@ -363,53 +386,59 @@ const Check = () => {
             </Typography>
           )}
 
-          {!isNoShowPending && !isNoShowError && noShow && (
-            <div className="overflow-x-auto">
-              <Table>
-                <Table.Head className="text-black text-center">
-                  <Table.HeadCell>출석 상태</Table.HeadCell>
-                  <Table.HeadCell>날짜</Table.HeadCell>
-                  <Table.HeadCell>호실</Table.HeadCell>
-                  <Table.HeadCell>시작 시간</Table.HeadCell>
-                  <Table.HeadCell>종료 시간</Table.HeadCell>
-                  <Table.HeadCell>
-                    <span className="sr-only">관리</span>
-                  </Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y text-center">
-                  {noShow.reservationList?.reservationInfoResponses?.map(
-                    (reservation, index) => (
-                      <Table.Row
-                        key={index}
-                        className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                        <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                          {reservationStateLabel(reservation)}
-                        </Table.Cell>
-                        <Table.Cell>
-                          {format(
-                            new Date(reservation.reservationStartTime),
-                            'yyyy-MM-dd',
-                          )}
-                        </Table.Cell>
-                        <Table.Cell>{formatRoom(reservation)}</Table.Cell>
-                        <Table.Cell>
-                          {format(reservation.reservationStartTime, 'HH:mm')}
-                        </Table.Cell>
-                        <Table.Cell>
-                          {format(reservation.reservationEndTime, 'HH:mm')}
-                        </Table.Cell>
-                        <Table.Cell>
-                          {isDisputable(reservation)
-                            ? renderInquiryLink(reservation)
-                            : null}
-                        </Table.Cell>
-                      </Table.Row>
-                    ),
-                  )}
-                </Table.Body>
-              </Table>
-            </div>
-          )}
+          {!isNoShowPending &&
+            !isNoShowError &&
+            noShow &&
+            (isNoShowEmpty ? (
+              <div className="px-4 pb-4">
+                <BooEmptyState variant="compact" title="미출석 예약이 없어요" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <Table.Head className="text-black text-center">
+                    <Table.HeadCell>출석 상태</Table.HeadCell>
+                    <Table.HeadCell>날짜</Table.HeadCell>
+                    <Table.HeadCell>호실</Table.HeadCell>
+                    <Table.HeadCell>시작 시간</Table.HeadCell>
+                    <Table.HeadCell>종료 시간</Table.HeadCell>
+                    <Table.HeadCell>
+                      <span className="sr-only">관리</span>
+                    </Table.HeadCell>
+                  </Table.Head>
+                  <Table.Body className="divide-y text-center">
+                    {Array.isArray(noShowReservations) &&
+                      noShowReservations.map((reservation, index) => (
+                        <Table.Row
+                          key={index}
+                          className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                          <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                            {reservationStateLabel(reservation)}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {format(
+                              new Date(reservation.reservationStartTime),
+                              'yyyy-MM-dd',
+                            )}
+                          </Table.Cell>
+                          <Table.Cell>{formatRoom(reservation)}</Table.Cell>
+                          <Table.Cell>
+                            {format(reservation.reservationStartTime, 'HH:mm')}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {format(reservation.reservationEndTime, 'HH:mm')}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {isDisputable(reservation)
+                              ? renderInquiryLink(reservation)
+                              : null}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                  </Table.Body>
+                </Table>
+              </div>
+            ))}
         </Popover>
       </div>
 
