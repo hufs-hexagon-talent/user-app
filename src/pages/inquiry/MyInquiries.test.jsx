@@ -1,5 +1,12 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { useMyInquiries } from '../../api/inquiry.api';
 
@@ -42,6 +49,24 @@ const RESOLVED_INQUIRY = {
   resolvedAt: '2026-08-30T11:40:00',
 };
 
+const OPEN_HISTORY = [2, 5, 1, 4, 3].map(day => ({
+  ...OPEN_INQUIRY,
+  inquiryId: 100 + day,
+  content: `대기 문의 ${day}`,
+  createAt: `2026-09-0${day}T10:00:00`,
+}));
+
+// 접수 순서와 답변 순서를 반대로 둬서 완료 목록의 정렬 기준도 검증한다.
+const RESOLVED_HISTORY = [3, 1, 5, 2, 4].map(day => ({
+  ...RESOLVED_INQUIRY,
+  inquiryId: 200 + day,
+  content: `완료 문의 ${day}`,
+  createAt: `2026-08-0${6 - day}T09:00:00`,
+  resolvedAt: `2026-09-0${day}T11:40:00`,
+}));
+
+const FULL_HISTORY = [...OPEN_HISTORY, ...RESOLVED_HISTORY];
+
 const mockList = (data, over = {}) =>
   useMyInquiries.mockReturnValue({
     data,
@@ -59,6 +84,14 @@ beforeEach(() => {
 const itemOf = text => screen.getByText(text).closest('li');
 const openItem = () => itemOf(OPEN_INQUIRY.content);
 const resolvedItem = () => itemOf(RESOLVED_INQUIRY.content);
+
+const expectInquiryOrder = (scope, contents) => {
+  const rows = within(scope).getAllByRole('listitem');
+  expect(rows).toHaveLength(contents.length);
+  contents.forEach((content, index) => {
+    expect(rows[index]).toHaveTextContent(content);
+  });
+};
 
 describe('MyInquiries', () => {
   it('제목은 내 문의다', () => {
@@ -333,5 +366,286 @@ describe('MyInquiries', () => {
     expect(
       screen.getByRole('button', { name: '문의하기' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('MyInquiries 전체 이력', () => {
+  it('정렬되지 않은 각 5건 중 최근 3건을 본문에 보여주고 전체 건수와 전체 보기를 제공한다', () => {
+    mockList(FULL_HISTORY);
+    render(<MyInquiries />);
+
+    const open = screen.getByRole('region', { name: '답변 대기 5건' });
+    const resolved = screen.getByRole('region', { name: '답변 완료 5건' });
+    expectInquiryOrder(open, ['대기 문의 5', '대기 문의 4', '대기 문의 3']);
+    expectInquiryOrder(resolved, ['완료 문의 5', '완료 문의 4', '완료 문의 3']);
+    expect(screen.getAllByRole('listitem')).toHaveLength(6);
+    expect(
+      within(open).getByRole('button', { name: '답변 대기 전체 보기' }),
+    ).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(
+      within(resolved).getByRole('button', { name: '답변 완료 전체 보기' }),
+    ).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(screen.queryByText('대기 문의 2')).not.toBeInTheDocument();
+    expect(screen.queryByText('완료 문의 2')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it.each([1, 3])(
+    '각 구획이 %i건이면 모두 본문에 보이고 전체 보기 버튼은 없다',
+    count => {
+      mockList([
+        ...OPEN_HISTORY.slice(0, count),
+        ...RESOLVED_HISTORY.slice(0, count),
+      ]);
+      render(<MyInquiries />);
+
+      expect(screen.getAllByRole('listitem')).toHaveLength(count * 2);
+      expect(
+        screen.queryByRole('button', { name: '답변 대기 전체 보기' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: '답변 완료 전체 보기' }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ['답변 대기', '대기', 101],
+    ['답변 완료', '완료', 201],
+  ])(
+    '%s 전체 보기에서 해당 구획의 5건을 최신순으로 읽고 오래된 문의 상세로 간다',
+    async (label, contentLabel, oldestId) => {
+      const user = userEvent.setup();
+      mockList(FULL_HISTORY);
+      render(<MyInquiries />);
+
+      await user.click(
+        screen.getByRole('button', { name: `${label} 전체 보기` }),
+      );
+
+      const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+      expect(
+        within(dialog).getByRole('tab', { name: `${label} 5건` }),
+      ).toHaveAttribute('aria-selected', 'true');
+      const panel = within(dialog).getByRole('tabpanel', {
+        name: `${label} 5건`,
+      });
+      expectInquiryOrder(
+        panel,
+        [5, 4, 3, 2, 1].map(day => `${contentLabel} 문의 ${day}`),
+      );
+
+      await user.click(
+        within(panel).getByText(`${contentLabel} 문의 1`).closest('button'),
+      );
+
+      expect(mockNavigate).toHaveBeenCalledWith(`/inquiry/${oldestId}`);
+    },
+  );
+
+  it('전체 이력의 탭을 클릭하거나 키보드로 선택하면 해당 구획으로 전환된다', async () => {
+    const user = userEvent.setup();
+    mockList(FULL_HISTORY);
+    render(<MyInquiries />);
+    await user.click(
+      screen.getByRole('button', { name: '답변 대기 전체 보기' }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+    const openTab = within(dialog).getByRole('tab', { name: '답변 대기 5건' });
+    const resolvedTab = within(dialog).getByRole('tab', {
+      name: '답변 완료 5건',
+    });
+    await user.click(resolvedTab);
+
+    expect(resolvedTab).toHaveAttribute('aria-selected', 'true');
+    expect(openTab).toHaveAttribute('aria-selected', 'false');
+    const resolvedPanel = within(dialog).getByRole('tabpanel', {
+      name: '답변 완료 5건',
+    });
+    expect(resolvedTab).toHaveAttribute('aria-controls', resolvedPanel.id);
+    expectInquiryOrder(resolvedPanel, [
+      '완료 문의 5',
+      '완료 문의 4',
+      '완료 문의 3',
+      '완료 문의 2',
+      '완료 문의 1',
+    ]);
+    expect(within(dialog).queryByText('대기 문의 5')).not.toBeInTheDocument();
+
+    await user.keyboard('{ArrowLeft}{Enter}');
+
+    expect(openTab).toHaveFocus();
+    expect(openTab).toHaveAttribute('aria-selected', 'true');
+    const openPanel = within(dialog).getByRole('tabpanel', {
+      name: '답변 대기 5건',
+    });
+    expect(openTab).toHaveAttribute('aria-controls', openPanel.id);
+    expectInquiryOrder(openPanel, [
+      '대기 문의 5',
+      '대기 문의 4',
+      '대기 문의 3',
+      '대기 문의 2',
+      '대기 문의 1',
+    ]);
+    expect(within(dialog).queryByText('완료 문의 5')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['답변 대기', OPEN_HISTORY, '답변 완료'],
+    ['답변 완료', RESOLVED_HISTORY, '답변 대기'],
+  ])(
+    '%s만 있을 때 다른 구획의 0건 탭에서도 빈 목록 안내를 읽을 수 있다',
+    async (label, inquiries, emptyLabel) => {
+      const user = userEvent.setup();
+      mockList(inquiries);
+      render(<MyInquiries />);
+      await user.click(
+        screen.getByRole('button', { name: `${label} 전체 보기` }),
+      );
+
+      const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+      await user.click(
+        within(dialog).getByRole('tab', { name: `${emptyLabel} 0건` }),
+      );
+
+      const panel = within(dialog).getByRole('tabpanel', {
+        name: `${emptyLabel} 0건`,
+      });
+      expect(
+        within(panel).getByText(`${emptyLabel} 문의가 없습니다.`),
+      ).toBeVisible();
+      expect(within(panel).queryByRole('list')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(['닫기 버튼', 'Escape', '배경'])(
+    '%s으로 전체 이력을 닫으면 열기 버튼으로 포커스가 돌아온다',
+    async closeMethod => {
+      const user = userEvent.setup();
+      mockList(FULL_HISTORY);
+      render(<MyInquiries />);
+      const trigger = screen.getByRole('button', {
+        name: '답변 대기 전체 보기',
+      });
+      await user.click(trigger);
+
+      const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+      const closeButton = within(dialog).getByRole('button', {
+        name: '문의 이력 닫기',
+      });
+      await waitFor(() => expect(dialog).toHaveFocus());
+      await user.tab();
+      expect(closeButton).toHaveFocus();
+
+      if (closeMethod === '닫기 버튼') {
+        await user.click(closeButton);
+      } else if (closeMethod === 'Escape') {
+        await user.keyboard('{Escape}');
+      } else {
+        // MUI 배경은 스크린리더에서 숨기므로 접근 역할 대신 배경 요소를 누른다.
+        await user.click(document.querySelector('.MuiBackdrop-root'));
+      }
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('dialog', { name: '전체 문의 이력' }),
+        ).not.toBeInTheDocument();
+        expect(trigger).toHaveFocus();
+      });
+    },
+  );
+
+  it.each([
+    ['답변 대기', '대기 문의 5', '306'],
+    ['답변 완료', '완료 문의 5', '예약 2026-08-30 10:00~11:00 201-A'],
+  ])(
+    '%s 본문과 전체 이력의 같은 문의는 서로 다른 메타 ID로 정확한 설명을 읽는다',
+    async (label, content, description) => {
+      const user = userEvent.setup();
+      mockList(FULL_HISTORY);
+      const { container } = render(<MyInquiries />);
+      const previewButton = within(container)
+        .getByText(content)
+        .closest('button');
+      await user.click(
+        screen.getByRole('button', { name: `${label} 전체 보기` }),
+      );
+
+      const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+      const historyButton = within(dialog).getByText(content).closest('button');
+      expect(previewButton).toBeInTheDocument();
+      expect(previewButton).toHaveAccessibleDescription(description);
+      expect(historyButton).toHaveAccessibleDescription(description);
+      expect(previewButton.getAttribute('aria-describedby')).not.toBe(
+        historyButton.getAttribute('aria-describedby'),
+      );
+
+      const describedButtons = document.querySelectorAll(
+        'button[aria-describedby]',
+      );
+      const descriptionIds = Array.from(describedButtons, button =>
+        button.getAttribute('aria-describedby'),
+      );
+      expect(descriptionIds).toHaveLength(11);
+      expect(new Set(descriptionIds).size).toBe(descriptionIds.length);
+      const elementsWithIds = Array.from(document.querySelectorAll('[id]'));
+      descriptionIds.forEach(id => {
+        expect(
+          elementsWithIds.filter(element => element.id === id),
+        ).toHaveLength(1);
+      });
+    },
+  );
+
+  it('열린 전체 이력에서 갱신이 실패해도 목록을 유지하고 재시도·진행·연결 대기 상태를 보여준다', async () => {
+    const user = userEvent.setup();
+    const refetch = jest.fn();
+    mockList(FULL_HISTORY, { refetch });
+    const { rerender } = render(<MyInquiries />);
+    await user.click(
+      screen.getByRole('button', { name: '답변 대기 전체 보기' }),
+    );
+
+    mockList(FULL_HISTORY, { isError: true, refetch });
+    rerender(<MyInquiries />);
+
+    const dialog = screen.getByRole('dialog', { name: '전체 문의 이력' });
+    expect(within(dialog).getByRole('status')).toHaveTextContent(STALE_MESSAGE);
+    expectInquiryOrder(dialog, [
+      '대기 문의 5',
+      '대기 문의 4',
+      '대기 문의 3',
+      '대기 문의 2',
+      '대기 문의 1',
+    ]);
+    expect(
+      within(dialog).queryByText('문의 목록을 불러오지 못했습니다.'),
+    ).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+
+    mockList(FULL_HISTORY, { isError: true, isFetching: true, refetch });
+    rerender(<MyInquiries />);
+    const fetchingButton = within(dialog).getByRole('button', {
+      name: '다시 불러오는 중',
+    });
+    expect(fetchingButton).toBeDisabled();
+    await user.click(fetchingButton);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(5);
+
+    mockList(FULL_HISTORY, { isError: true, isPaused: true, refetch });
+    rerender(<MyInquiries />);
+    expect(
+      within(dialog).getByRole('button', { name: '연결을 기다리는 중' }),
+    ).toBeDisabled();
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(5);
+
+    mockList(FULL_HISTORY, { refetch });
+    rerender(<MyInquiries />);
+    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(5);
   });
 });
