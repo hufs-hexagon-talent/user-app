@@ -1,4 +1,7 @@
 import {
+  MIDNIGHT_NOT_CLEARED_MESSAGE,
+  MIDNIGHT_UNSUPPORTED_MESSAGE,
+  midnightMismatchMessage,
   POLICY_FORBIDDEN_MESSAGE,
   POLICY_NETWORK_MESSAGE,
   POLICY_SERVER_MESSAGE,
@@ -196,5 +199,38 @@ describe('policyErrorMessage 참조 충돌', () => {
 
     expect(message).toContain('운영 스케줄');
     expect(message).not.toContain('Duplicate entry');
+  });
+});
+
+describe('midnightMismatchMessage', () => {
+  it('보내지 않았으면 확인하지 않는다', () => {
+    expect(midnightMismatchMessage(undefined, {})).toBeNull();
+    expect(midnightMismatchMessage(undefined, undefined)).toBeNull();
+  });
+
+  it('켰는데 응답이 true 면 통과, 필드가 없거나 false 면 지원하지 않는다고 알린다', () => {
+    expect(midnightMismatchMessage(true, { endsAtMidnight: true })).toBeNull();
+    expect(midnightMismatchMessage(true, {})).toBe(
+      MIDNIGHT_UNSUPPORTED_MESSAGE,
+    );
+    expect(midnightMismatchMessage(true, { endsAtMidnight: false })).toBe(
+      MIDNIGHT_UNSUPPORTED_MESSAGE,
+    );
+  });
+
+  it('껐는데 응답이 여전히 true 면 알린다. 필드가 없으면 꺼진 것으로 본다', () => {
+    expect(
+      midnightMismatchMessage(false, { endsAtMidnight: false }),
+    ).toBeNull();
+    expect(midnightMismatchMessage(false, {})).toBeNull();
+    expect(midnightMismatchMessage(false, { endsAtMidnight: true })).toBe(
+      MIDNIGHT_NOT_CLEARED_MESSAGE,
+    );
+  });
+
+  it('POLICY-005 는 자정 운영을 먼저 끄라고 안내한다', () => {
+    expect(
+      policyErrorMessage(httpError(400, { code: 'POLICY-005' }), FALLBACK),
+    ).toContain('자정 운영을 먼저 끄세요');
   });
 });

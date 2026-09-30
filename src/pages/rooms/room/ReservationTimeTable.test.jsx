@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react';
 
+import { buildSlots } from './operationWindow';
 import ReservationTimeTable from './ReservationTimeTable';
 
 const room = (over = {}) => ({
@@ -14,14 +15,14 @@ const room = (over = {}) => ({
   ...over,
 });
 
-// 마지막 항목은 종료 경계라 본문에 칸이 생기지 않는다
-const times = ['09:00', '09:30', '10:00', '10:30', '11:00'];
+// 09:00~11:00 이라 칸은 09:00, 09:30, 10:00, 10:30 네 개다
+const slots = buildSlots([room()], '2099-01-01');
 
 const setup = (over = {}) =>
   render(
     <ReservationTimeTable
       rooms={[room()]}
-      times={times}
+      slots={slots}
       selectedDate="2099-01-01"
       now={new Date('2099-01-01T00:00:00')}
       selection={null}
@@ -35,8 +36,8 @@ describe('ReservationTimeTable 열 구성', () => {
     const { container } = setup();
     const headSlots = container.querySelectorAll('thead [data-time-index]');
     const bodySlots = container.querySelectorAll('tbody [data-time-index]');
-    expect(headSlots.length).toBe(times.length - 1);
-    expect(bodySlots.length).toBe(times.length - 1);
+    expect(headSlots.length).toBe(slots.length);
+    expect(bodySlots.length).toBe(slots.length);
   });
 
   // 원래 버그는 라벨이 sticky 호실명 열 아래로 겹쳐 보이던 CSS 문제였다. jsdom 은
@@ -132,5 +133,173 @@ describe('ReservationTimeTable 접근성', () => {
     expect(container.querySelector('caption').textContent).toBe(
       '호실별 30분 단위 예약 현황',
     );
+  });
+});
+
+describe('ReservationTimeTable 자정 정책', () => {
+  it('자정까지 여는 날은 48열이고 마지막 머리글은 23:30~24:00 이다', () => {
+    const midnight = room({
+      operationStartTime: '00:00:00',
+      operationEndTime: '23:30:00',
+      endsAtMidnight: true,
+    });
+    const { container } = setup({
+      rooms: [midnight],
+      slots: buildSlots([midnight], '2099-01-01'),
+    });
+
+    const heads = container.querySelectorAll('thead [data-time-index]');
+    expect(heads).toHaveLength(48);
+    expect(heads[47]).toHaveAttribute('aria-label', '23:30~24:00');
+    const cells = container.querySelectorAll('tbody [data-time-index]');
+    expect(cells[47]).toHaveAttribute(
+      'aria-label',
+      '세미나실-1 23:30 예약 가능',
+    );
+  });
+});
+
+// jsdom 은 레이아웃이 없어 offsetLeft 가 늘 0 이다. 머리글 칸의 위치를 칸 번호로 흉내 내고
+// 스크롤 컨테이너에 들어간 scrollLeft 를 읽어 첫 위치가 어느 칸인지 본다.
+describe('ReservationTimeTable 첫 스크롤 위치', () => {
+  const STICKY = 52;
+  const CELL = 44;
+  let offsetLeft;
+  let offsetWidth;
+  let scrollLeft;
+
+  beforeEach(() => {
+    offsetLeft = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetLeft',
+    );
+    offsetWidth = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetWidth',
+    );
+    scrollLeft = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'scrollLeft',
+    );
+    Object.defineProperty(HTMLElement.prototype, 'offsetLeft', {
+      configurable: true,
+      get() {
+        const index = this.getAttribute('data-time-index');
+        return index === null ? 0 : STICKY + Number(index) * CELL;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get() {
+        return this.hasAttribute('data-sticky-col') ? STICKY : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollLeft', {
+      configurable: true,
+      get() {
+        return this.recordedScrollLeft ?? 0;
+      },
+      set(value) {
+        this.recordedScrollLeft = value;
+      },
+    });
+  });
+
+  afterEach(() => {
+    const restore = (name, descriptor) => {
+      if (descriptor) {
+        Object.defineProperty(HTMLElement.prototype, name, descriptor);
+      } else {
+        delete HTMLElement.prototype[name];
+      }
+    };
+    restore('offsetLeft', offsetLeft);
+    restore('offsetWidth', offsetWidth);
+    restore('scrollLeft', scrollLeft);
+  });
+
+  const scrolledIndex = container =>
+    container.querySelector('.MuiTableContainer-root').scrollLeft / CELL;
+
+  // 두 날 모두 미래라 '오늘' 규칙을 타지 않는다
+  const now = new Date('2098-12-31T12:00:00');
+  const plain = room({ operationEndTime: '22:00:00' });
+  const allDay = room({
+    operationStartTime: '00:00:00',
+    operationEndTime: '23:30:00',
+    endsAtMidnight: true,
+  });
+
+  it('00:00 부터 여는 미래 날짜는 09:00 칸에서 시작한다', () => {
+    const { container } = setup({
+      rooms: [allDay],
+      slots: buildSlots([allDay], '2099-01-02'),
+      selectedDate: '2099-01-02',
+      now,
+    });
+
+    expect(scrolledIndex(container)).toBe(18);
+  });
+
+  // 옛 RoomPage 는 표 범위를 effect 로 state 에 옮겨 한 렌더 늦었다. 날짜가 바뀐 첫 렌더는 이전 날의
+  // 칸 목록으로 그려지고, 첫 위치 키가 날짜뿐이라 다음 렌더에 칸 목록이 바뀌어도 위치를 다시 잡지 않았다.
+  it('날짜가 먼저 바뀌고 칸 목록이 뒤따라 바뀌어도 새 칸 목록으로 첫 위치를 다시 잡는다', () => {
+    const plainSlots = buildSlots([plain], '2099-01-01');
+    const { container, rerender } = setup({
+      rooms: [plain],
+      slots: plainSlots,
+      selectedDate: '2099-01-01',
+      now,
+    });
+    expect(scrolledIndex(container)).toBe(0);
+
+    const props = {
+      now,
+      selection: null,
+      onCellClick: jest.fn(),
+    };
+    rerender(
+      <ReservationTimeTable
+        {...props}
+        rooms={[plain]}
+        slots={plainSlots}
+        selectedDate="2099-01-02"
+      />,
+    );
+    rerender(
+      <ReservationTimeTable
+        {...props}
+        rooms={[allDay]}
+        slots={buildSlots([allDay], '2099-01-02')}
+        selectedDate="2099-01-02"
+      />,
+    );
+
+    expect(scrolledIndex(container)).toBe(18);
+  });
+
+  it('30초 재조회로 칸 목록이 새로 와도 같은 날·같은 칸이면 위치를 되돌리지 않는다', () => {
+    const { container, rerender } = setup({
+      rooms: [allDay],
+      slots: buildSlots([allDay], '2099-01-02'),
+      selectedDate: '2099-01-02',
+      now,
+    });
+    const el = container.querySelector('.MuiTableContainer-root');
+    // 학생이 가로로 밀어 둔 위치
+    el.scrollLeft = 30 * CELL;
+
+    rerender(
+      <ReservationTimeTable
+        rooms={[{ ...allDay }]}
+        slots={buildSlots([allDay], '2099-01-02')}
+        selectedDate="2099-01-02"
+        now={new Date('2098-12-31T12:00:30')}
+        selection={null}
+        onCellClick={jest.fn()}
+      />,
+    );
+
+    expect(scrolledIndex(container)).toBe(30);
   });
 });

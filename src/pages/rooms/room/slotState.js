@@ -5,18 +5,30 @@ import {
   format,
 } from 'date-fns';
 
+import { SLOT_MINUTES } from './operationWindow';
 import { isOutsideOperationHours } from './reservationSlot';
 
-export const SLOT_INTERVAL_MINUTE = 30;
+// 오늘이 아닌 날의 첫 화면. 00:00 부터 여는 날에 첫 칸부터 보이면 393px 에서 18칸(약 790px)을
+// 밀어야 해서, 표가 이보다 일찍 시작하는 날에는 이 칸에서 시작한다.
+export const FIRST_VISIBLE_MINUTE = 9 * 60; // 분, 09:00
 
 // 칸 하나의 상태를 낸다. 시각 표현은 하지 않고 판정만 한다.
-export const getSlotState = ({ slotStart, now, room, selection }) => {
-  const slotEnd = addMinutes(slotStart, SLOT_INTERVAL_MINUTE);
+// slotMinute 은 칸 시작이 선택한 날 0시부터 몇 분인지다. 주지 않으면 slotStart 의 시각으로 본다.
+export const getSlotState = ({
+  slotStart,
+  slotMinute,
+  now,
+  room,
+  selection,
+}) => {
+  const slotEnd = addMinutes(slotStart, SLOT_MINUTES);
 
+  // 칸 전체가 그 호실의 운영창 안일 때만 연다. 표의 공통 범위가 아니라 호실별로 본다.
   const closed = isOutsideOperationHours(
-    format(slotStart, 'HH:mm'),
+    slotMinute ?? slotStart.getHours() * 60 + slotStart.getMinutes(),
     room.operationStartTime,
     room.operationEndTime,
+    room.endsAtMidnight,
   );
   const past = now > slotEnd;
   // 이 칸을 덮는 예약들. 한 칸을 덮는 예약이 여럿일 수 있어 목록으로 둔다.
@@ -69,16 +81,27 @@ export const getSlotState = ({ slotStart, now, room, selection }) => {
   };
 };
 
-// 표를 열었을 때 가로 스크롤이 향할 열. 오늘이면 현재 시각 한 칸 앞, 아니면 처음.
-export const initialScrollIndex = ({ times, now, selectedDate }) => {
-  if (!times?.length) return 0;
-  if (selectedDate !== format(now, 'yyyy-MM-dd')) return 0;
+// 표를 열었을 때 가로 스크롤이 향할 칸.
+// 오늘이면 현재 칸의 한 칸 앞이다. 운영이 끝났으면 마지막 칸이다.
+// 오늘이 아니면 표가 09:00 전부터 시작하는 날만 09:00 칸이고, 그 밖에는 처음이다.
+// 칸의 절대 시각으로 비교하므로 자정에 끝나는 날에도 경계 문자열 때문에 끝으로 가지 않는다.
+export const initialScrollIndex = ({ slots, now, selectedDate }) => {
+  if (!slots?.length) return 0;
 
-  const nowHm = format(now, 'HH:mm');
-  let current = -1;
-  for (let i = 0; i < times.length; i += 1) {
-    if (times[i] <= nowHm) current = i;
+  if (selectedDate !== format(now, 'yyyy-MM-dd')) {
+    if (slots[0].startMinute >= FIRST_VISIBLE_MINUTE) return 0;
+    const index = slots.findIndex(
+      slot => slot.startMinute >= FIRST_VISIBLE_MINUTE,
+    );
+    return index < 0 ? 0 : index;
   }
+
+  let current = -1;
+  slots.forEach((slot, index) => {
+    if (slot.startAt <= now) current = index;
+  });
   if (current < 0) return 0;
-  return Math.min(Math.max(0, current - 1), Math.max(0, times.length - 2));
+  // 마지막 칸까지 지났으면 표 끝 경계를 현재로 본다. 그 한 칸 앞이 마지막 칸이다.
+  if (slots[slots.length - 1].endAt <= now) current = slots.length;
+  return Math.min(Math.max(0, current - 1), slots.length - 1);
 };

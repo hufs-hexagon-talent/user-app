@@ -114,3 +114,29 @@ describe('SelectionBar 본문 여백', () => {
     expect(document.body.style.paddingBottom).toBe('');
   });
 });
+
+describe('SelectionBar 자정 표기', () => {
+  it('자정에 끝나면 24:00 으로 적는다', () => {
+    const { getByText } = render(
+      <SelectionBar
+        {...props({
+          from: new Date('2026-10-20T23:30:00'),
+          to: new Date('2026-10-21T00:00:00'),
+        })}
+      />,
+    );
+    expect(getByText('306-1 · 23:30~24:00')).toBeInTheDocument();
+  });
+
+  it('다음 날에 끝나면 익일을 붙인다', () => {
+    const { getByText } = render(
+      <SelectionBar
+        {...props({
+          from: new Date('2026-10-20T23:00:00'),
+          to: new Date('2026-10-21T01:00:00'),
+        })}
+      />,
+    );
+    expect(getByText('306-1 · 23:00~익일 01:00')).toBeInTheDocument();
+  });
+});

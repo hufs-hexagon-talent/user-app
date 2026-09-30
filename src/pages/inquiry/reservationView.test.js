@@ -213,3 +213,32 @@ describe('linkedReservationLabel', () => {
     ).toBe('2026-08-30 10:00~11:00 201-A · 취소된 예약');
   });
 });
+
+describe('자정 표기', () => {
+  const midnightEnd = reservation({
+    reservationStartTime: '2026-10-20T23:30:00+09:00',
+    reservationEndTime: '2026-10-21T00:00:00+09:00',
+  });
+  const nextDayEnd = reservation({
+    reservationStartTime: '2026-10-20T23:00:00+09:00',
+    reservationEndTime: '2026-10-21T01:00:00+09:00',
+  });
+
+  // 서버 스냅샷(ReservationTimeLabel)과 같은 모양이어야 수정 모드에서 두 값이 나란히 놓인다
+  it('날짜는 시작일이고 끝은 24:00·익일 HH:mm 이다', () => {
+    expect(formatReservationTime(midnightEnd)).toBe('2026-10-20 23:30~24:00');
+    expect(formatReservationTime(nextDayEnd)).toBe(
+      '2026-10-20 23:00~익일 01:00',
+    );
+  });
+
+  it('피커 카드의 시각도 같은 표기다', () => {
+    expect(formatReservationTimeRange(midnightEnd)).toBe('23:30~24:00');
+    expect(formatReservationTimeRange(nextDayEnd)).toBe('23:00~익일 01:00');
+  });
+
+  it('자정을 넘는 예약은 시작일 묶음에 든다', () => {
+    const groups = groupByDate([nextDayEnd]);
+    expect(groups.map(g => g.key)).toEqual(['2026-10-20']);
+  });
+});

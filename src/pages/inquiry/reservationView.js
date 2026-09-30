@@ -1,6 +1,8 @@
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
+import { timeRangeLabel } from '../../utils/reservationTimeLabel';
+
 // 예약 선택 모달·예약 카드·내 문의 목록이 쓰는 표시 규칙(라벨·포맷·정렬).
 // 화면 로직은 여기에만 두고 컴포넌트는 그리기만 한다.
 
@@ -22,10 +24,11 @@ export const reservationStateLabel = (reservation, now = new Date()) => {
 
 // 서버가 만드는 스냅샷(reservationSummary)과 같은 포맷. 수정 모드에서 두 값이 한 자리에
 // 번갈아 보이고, 연도가 다른 예약이 같은 줄로 보이지 않게 연도를 붙인다.
+// 날짜는 시작일이고 끝은 공용 표기다('2026-10-20 23:30~24:00', '2026-10-20 23:00~익일 01:00').
 export const formatReservationTime = reservation => {
   const start = new Date(reservation.reservationStartTime);
   const end = new Date(reservation.reservationEndTime);
-  return `${format(start, 'yyyy-MM-dd HH:mm')}~${format(end, 'HH:mm')}`;
+  return `${format(start, 'yyyy-MM-dd')} ${timeRangeLabel(start, end)}`;
 };
 
 export const formatRoom = reservation =>
@@ -62,12 +65,12 @@ export const isDisputable = (reservation, now = new Date()) => {
   );
 };
 
-// 피커 카드용 — 날짜는 그룹 제목이 갖는다. 접근 이름에는 formatReservationTime(날짜 포함)을 쓴다.
+// 피커 카드용 — 날짜는 그룹 제목이 갖는다(시작일로 묶는다). 접근 이름에는 formatReservationTime(날짜 포함)을 쓴다.
 export const formatReservationTimeRange = reservation =>
-  `${format(new Date(reservation.reservationStartTime), 'HH:mm')}~${format(
+  timeRangeLabel(
+    new Date(reservation.reservationStartTime),
     new Date(reservation.reservationEndTime),
-    'HH:mm',
-  )}`;
+  );
 
 // 연도를 붙인다 — 이력이 100건을 넘는 학생은 지난해 같은 날짜가 함께 나온다.
 export const formatDateHeading = value =>
