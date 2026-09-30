@@ -167,13 +167,20 @@ const InquiryDetail = () => {
         </div>
       )}
 
-      {meta && <p className="mt-4 text-xs text-gray-500">{meta}</p>}
-
-      {/* 뒤로 링크가 "내 문의"(목록 제목)라 본문 라벨은 "문의 내용" 으로 둔다. "관리자 답변" 과도 짝이 맞다. */}
-      <p className="mt-4 text-xs font-semibold text-gray-600">문의 내용</p>
-      <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap break-words break-keep">
-        {inquiry.content}
-      </p>
+      {/* 뒤로 링크가 "내 문의"(목록 제목)라 본문 라벨은 "문의 내용" 으로 둔다. "관리자 답변" 과도 짝이 맞다.
+          본문은 답변과 같은 크기의 맨 글이라 어디부터 학생이 쓴 글인지 경계가 없었다. 답변은 회색 면,
+          본문은 흰 바탕 테두리 상자로 담아 두 상자를 가른다. 목록은 한 줄 요약이라 그대로 둔다.
+          메타 줄(연결 예약·방)은 학생이 고른 값이라 본문 상자와 한 묶음으로 붙인다. 두 상자 사이에
+          같은 간격으로 떠 있으면 답변에 딸린 줄로도 읽힌다. */}
+      <div className="mt-4">
+        {meta && <p className="mb-2 text-xs text-gray-500">{meta}</p>}
+        <div className="rounded-md border border-gray-200 bg-white p-3">
+          <p className="text-xs font-semibold text-gray-600">문의 내용</p>
+          <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap break-words break-keep">
+            {inquiry.content}
+          </p>
+        </div>
+      </div>
 
       {!isResolved && (
         <div className="mt-6 flex justify-end gap-3 text-sm">

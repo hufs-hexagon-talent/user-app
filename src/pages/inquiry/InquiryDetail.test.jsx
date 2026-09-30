@@ -125,6 +125,56 @@ describe('InquiryDetail', () => {
     expect(screen.queryByText(/처리 메모/)).toBeNull();
   });
 
+  // 답변과 본문이 같은 크기의 맨 글이면 어디부터 학생이 쓴 글인지 경계가 없다.
+  // jsdom 은 CSS 를 평가하지 않아 모양은 클래스로 본다. 답변은 회색 면, 본문은 테두리 상자다.
+  it('문의 내용 라벨과 본문을 답변과 다른 테두리 상자에 함께 담는다', () => {
+    mockParamId = '2';
+    render(<InquiryDetail />);
+
+    const bodyBox = screen.getByText(RESOLVED_INQUIRY.content).parentElement;
+    const answerBox = screen.getByText(
+      RESOLVED_INQUIRY.adminMemo,
+    ).parentElement;
+
+    expect(bodyBox).toContainElement(screen.getByText('문의 내용'));
+    expect(bodyBox).toHaveClass('border');
+    expect(bodyBox).not.toHaveClass('bg-gray-50');
+    expect(bodyBox).not.toContainElement(answerBox);
+    expect(answerBox).not.toContainElement(bodyBox);
+    expect(answerBox).toHaveClass('bg-gray-50');
+    expect(answerBox).not.toHaveClass('border');
+  });
+
+  // 메타 줄은 학생이 고른 예약이다. 두 상자 사이에 따로 떠 있으면 답변에 딸린 줄로도 읽힌다.
+  it('연결 예약 줄은 답변 상자가 아니라 본문 상자와 한 묶음이다', () => {
+    mockParamId = '2';
+    render(<InquiryDetail />);
+
+    const meta = screen.getByText(
+      `예약 ${RESOLVED_INQUIRY.reservationSummary}`,
+    );
+    const bodyBox = screen.getByText(RESOLVED_INQUIRY.content).parentElement;
+    const answerBox = screen.getByText(
+      RESOLVED_INQUIRY.adminMemo,
+    ).parentElement;
+
+    expect(meta.parentElement).toContainElement(bodyBox);
+    expect(meta.parentElement).not.toContainElement(answerBox);
+    expect(bodyBox).not.toContainElement(meta);
+    expect(
+      meta.compareDocumentPosition(bodyBox) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  // 답변이 아직 없어도 본문은 같은 상자에 담긴다.
+  it('답변이 없는 문의도 본문을 테두리 상자에 담는다', () => {
+    render(<InquiryDetail />);
+
+    const bodyBox = screen.getByText(OPEN_INQUIRY.content).parentElement;
+    expect(bodyBox).toContainElement(screen.getByText('문의 내용'));
+    expect(bodyBox).toHaveClass('border');
+  });
+
   // 관리자가 재오픈하면 status 는 OPEN 인데 답변은 남는다. 숨기면 학생은 답변을 잃는다.
   it('재오픈된 문의는 이전 답변을 시각 없이 보여주고 수정·삭제도 남긴다', () => {
     mockList([{ ...OPEN_INQUIRY, adminMemo: '자리를 다시 확인해 주세요.' }]);
