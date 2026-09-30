@@ -1,5 +1,11 @@
 import { format } from 'date-fns';
-import { shortDateLabel } from './dateLabel';
+import {
+  dateChipLabel,
+  dayOfMonthLabel,
+  monthDayLabel,
+  shortDateLabel,
+  weekdayDateLabel,
+} from './dateLabel';
 
 describe('shortDateLabel', () => {
   it('오늘이면 뒤에 (오늘) 을 붙인다', () => {
@@ -27,6 +33,27 @@ describe('shortDateLabel', () => {
   it('오늘 날짜 문자열을 넣으면 (오늘) 이 붙는다', () => {
     const todayString = format(new Date(), 'yyyy-MM-dd');
     expect(shortDateLabel(todayString)).toBe(`${formatToday()} (오늘)`);
+  });
+});
+
+describe('익일 꼬리와 다른 날 표에 쓰는 날짜', () => {
+  const day = new Date('2026-10-21T00:30:00');
+
+  it('접근 이름은 월·일만 적는다', () => {
+    expect(monthDayLabel(day)).toBe('10월 21일');
+  });
+
+  it('다른 날 표 링크는 요일을 붙인다', () => {
+    expect(weekdayDateLabel(day)).toBe('10월 21일(수)');
+  });
+
+  it('머리글 날짜 칩은 점으로 줄여 적는다', () => {
+    expect(dateChipLabel(day)).toBe('10.21(수)');
+    expect(dateChipLabel(new Date('2027-01-05T00:00:00'))).toBe('1.5(화)');
+  });
+
+  it('확인 모달의 종료 캡션은 일과 요일이다', () => {
+    expect(dayOfMonthLabel(day)).toBe('21일(수)');
   });
 });
 

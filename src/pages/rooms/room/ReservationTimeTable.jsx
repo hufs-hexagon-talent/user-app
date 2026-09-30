@@ -9,6 +9,8 @@ import {
   TableRow,
 } from '@mui/material';
 
+import { dateChipLabel, monthDayLabel } from './dateLabel';
+import { MINUTES_PER_DAY } from './operationWindow';
 import { SLOT_LABEL, SLOT_PALETTE } from './slotPalette';
 import { getSlotState, initialScrollIndex } from './slotState';
 import { TABLE_GUTTER_SX } from './tableGutter';
@@ -17,9 +19,18 @@ import useTimeTableScroll from './useTimeTableScroll';
 const STICKY_COL_WIDTH = { xs: 52, md: 100 };
 const GRID_BORDER = '1px solid #B6B4B0';
 const HALF_HOUR_BORDER = '1px solid #D6D3CF';
+// 익일 꼬리가 붙은 날, 23:30 칸과 다음 날 00:00 칸 사이의 자정선
+const MIDNIGHT_BORDER = '2px solid #002D56';
+
+// 칸 오른쪽 경계. 정시는 실선, 30분은 옅은 선이다. 오른쪽 경계의 시각으로 구분해야 09:30 시작도 맞는다.
+// 표의 마지막 경계는 종료 시각에 관계없이 실선으로 닫는다.
+const cellBorderRight = (slot, isLast, hasNextDay) => {
+  if (hasNextDay && slot.endMinute === MINUTES_PER_DAY) return MIDNIGHT_BORDER;
+  return slot.endMinute % 60 === 0 || isLast ? GRID_BORDER : HALF_HOUR_BORDER;
+};
 
 // slots: operationWindow.buildSlots 가 만든 칸 목록. 칸마다 분·절대 시각·라벨을 갖고 있어
-// 여기서 시각 문자열을 날짜와 붙여 다시 읽지 않는다.
+// 여기서 시각 문자열을 날짜와 붙여 다시 읽지 않는다. 익일 꼬리 칸(nextDay)은 접근 이름에 날짜를 넣는다.
 const ReservationTimeTable = ({
   rooms,
   slots,
@@ -42,6 +53,8 @@ const ReservationTimeTable = ({
       index: initialScrollIndex({ slots, now, selectedDate }),
     };
   }
+
+  const hasNextDay = slots.some(slot => slot.nextDay);
 
   const { containerRef, edges, handleScroll } = useTimeTableScroll({
     scrollToIndex: initialIndexRef.current?.index ?? 0,
@@ -91,7 +104,11 @@ const ReservationTimeTable = ({
                     component="th"
                     scope="col"
                     align="left"
-                    aria-label={`${slot.label}~${slot.endLabel}`}
+                    aria-label={
+                      slot.nextDay
+                        ? `${monthDayLabel(slot.startAt)} ${slot.label}~${slot.endLabel}`
+                        : `${slot.label}~${slot.endLabel}`
+                    }
                     sx={{
                       border: 'none',
                       position: 'relative',
@@ -102,7 +119,30 @@ const ReservationTimeTable = ({
                       color: '#555',
                       whiteSpace: 'nowrap',
                       fontVariantNumeric: 'tabular-nums',
+                      // 날짜 칩이 있는 날에도 시각 라벨이 한 줄에 맞도록 아래에 붙인다
+                      verticalAlign: 'bottom',
                     }}>
+                    {slot.startMinute === MINUTES_PER_DAY && (
+                      <Box
+                        component="span"
+                        aria-hidden
+                        sx={{
+                          display: 'table',
+                          position: 'relative',
+                          left: '-0.5px',
+                          transform: 'translateX(-50%)',
+                          marginBottom: '3px',
+                          padding: '2px 6px',
+                          borderRadius: '999px',
+                          backgroundColor: '#002D56',
+                          color: '#fff',
+                          fontSize: { xs: '10px', md: '11px' },
+                          fontWeight: 700,
+                          lineHeight: 1.2,
+                        }}>
+                        {dateChipLabel(slot.startAt)}
+                      </Box>
+                    )}
                     {(slot.startMinute % 60 === 0 || timeIndex === 0) && (
                       <Box
                         component="span"
@@ -175,7 +215,7 @@ const ReservationTimeTable = ({
                         role="button"
                         tabIndex={state.selectable ? 0 : -1}
                         aria-disabled={!state.selectable}
-                        aria-label={`${room.roomName}-${room.partitionNumber} ${slot.label} ${SLOT_LABEL[state.status] ?? state.status}`}
+                        aria-label={`${room.roomName}-${room.partitionNumber} ${slot.nextDay ? `${monthDayLabel(slot.startAt)} ` : ''}${slot.label} ${SLOT_LABEL[state.status] ?? state.status}`}
                         onClick={() => onCellClick(room, timeIndex, state)}
                         onKeyDown={event => {
                           if (event.key !== 'Enter' && event.key !== ' ')
@@ -195,13 +235,11 @@ const ReservationTimeTable = ({
                           backgroundColor: palette.background,
                           backgroundImage: palette.pattern ?? 'none',
                           border: 'none',
-                          // 오른쪽 경계의 시각으로 구분해야 09:30 시작도 맞는다.
-                          // 표의 마지막 경계는 종료 시각에 관계없이 실선으로 닫는다.
-                          borderRight:
-                            slot.endMinute % 60 === 0 ||
-                            timeIndex === slots.length - 1
-                              ? GRID_BORDER
-                              : HALF_HOUR_BORDER,
+                          borderRight: cellBorderRight(
+                            slot,
+                            timeIndex === slots.length - 1,
+                            hasNextDay,
+                          ),
                           borderBottom: GRID_BORDER,
                           borderTop: i === 0 ? GRID_BORDER : 'none',
                           cursor: state.selectable ? 'pointer' : 'not-allowed',
