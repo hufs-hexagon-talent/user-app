@@ -2,9 +2,8 @@ import { areIntervalsOverlapping } from 'date-fns';
 
 import {
   endMinuteLabel,
-  isSlotInsideWindow,
+  isSlotClosedForRoom,
   MINUTES_PER_DAY,
-  roomOperationWindow,
   slotBoundaries,
   toMinutes,
 } from './operationWindow';
@@ -26,21 +25,19 @@ export const createTimeTable = config => {
 
 // 칸 전체가 호실의 운영창 안에 있지 않으면 잠근다. 운영 시작 전 칸, 종료 시각과 같은 칸이 여기에 든다.
 // slot 은 칸 시작의 분(그날 0시부터) 또는 "HH:mm" 이다. 자정 정책(endsAtMidnight)이면 23:30 칸까지 연다.
+// 익일 꼬리는 보지 않는다. 예약표는 호실 객체를 받는 operationWindow.isSlotClosedForRoom 을 쓰고,
+// 이 함수는 같은 규칙에 운영시간 세 값만 넘기는 호환 함수다.
 export const isOutsideOperationHours = (
   slot,
   operationStartTime,
   operationEndTime,
   endsAtMidnight = false,
-) => {
-  const slotMinute = toMinutes(slot);
-  const range = roomOperationWindow({
-    operationStartTime,
-    operationEndTime,
-    endsAtMidnight,
-  });
-  if (slotMinute === null || !range) return false;
-  return !isSlotInsideWindow(slotMinute, range);
-};
+) =>
+  isSlotClosedForRoom(
+    { operationStartTime, operationEndTime, endsAtMidnight },
+    toMinutes(slot),
+    null,
+  );
 
 // [from, to) 안에 이미 잡힌 예약이 하나라도 있는지. 연장 선택이 남의 예약을 건너뛰지 못하게 한다.
 export const hasReservedSlotInRange = (reservationTimeRanges, from, to) => {

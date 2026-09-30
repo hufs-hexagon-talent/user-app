@@ -159,6 +159,106 @@ describe('ReservationTimeTable 자정 정책', () => {
   });
 });
 
+// 공개 예약표 응답의 overnightUntil(A2)로 23:30 칸 뒤에 다음 날 새벽 칸을 붙인 표
+describe('ReservationTimeTable 익일 꼬리', () => {
+  const midnight = (over = {}) =>
+    room({
+      operationStartTime: '00:00:00',
+      operationEndTime: '23:30:00',
+      endsAtMidnight: true,
+      ...over,
+    });
+  // 2099-01-02 01:30 KST
+  const tail = midnight({ overnightUntil: '2099-01-01T16:30:00Z' });
+  const other = midnight({
+    partitionId: 2,
+    partitionNumber: 2,
+    overnightUntil: null,
+  });
+  const renderTail = (rooms = [tail, other]) =>
+    setup({ rooms, slots: buildSlots(rooms, '2099-01-01') });
+  const heads = container =>
+    container.querySelectorAll('thead [data-time-index]');
+  const rowCells = (container, rowIndex) =>
+    container
+      .querySelectorAll('tbody tr')
+      [rowIndex].querySelectorAll('[data-time-index]');
+
+  it('꼬리 머리글의 접근 이름에 날짜를 넣고 첫 칸에 날짜 칩을 얹는다', () => {
+    const { container } = renderTail();
+
+    const cells = heads(container);
+    expect(cells).toHaveLength(51);
+    expect(cells[47]).toHaveAttribute('aria-label', '23:30~24:00');
+    expect(cells[48]).toHaveAttribute('aria-label', '1월 2일 00:00~00:30');
+    expect(cells[50]).toHaveAttribute('aria-label', '1월 2일 01:00~01:30');
+    expect(cells[48].textContent).toBe('1.2(금)00:00');
+    expect(cells[50].textContent).toBe('01:00');
+    // 칩은 이 칸 하나에만 있다
+    expect(
+      Array.from(cells).filter(cell => cell.textContent.includes('(')),
+    ).toHaveLength(1);
+  });
+
+  it('꼬리 칸의 접근 이름에 날짜를 넣고, 꼬리가 없는 호실은 잠근다', () => {
+    const { container } = renderTail();
+
+    expect(rowCells(container, 0)[49]).toHaveAttribute(
+      'aria-label',
+      '세미나실-1 1월 2일 00:30 예약 가능',
+    );
+    expect(rowCells(container, 0)[47]).toHaveAttribute(
+      'aria-label',
+      '세미나실-1 23:30 예약 가능',
+    );
+    const locked = rowCells(container, 1)[48];
+    expect(locked).toHaveAttribute(
+      'aria-label',
+      '세미나실-2 1월 2일 00:00 예약 불가',
+    );
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('23:30 칸과 다음 날 00:00 칸 사이에 자정선을 긋는다', () => {
+    const { container } = renderTail();
+
+    [0, 1].forEach(row => {
+      expect(rowCells(container, row)[47]).toHaveStyle({
+        borderRight: '2px solid #002D56',
+      });
+      expect(rowCells(container, row)[48]).toHaveStyle({
+        borderRight: '1px solid #D6D3CF',
+      });
+    });
+  });
+
+  it('꼬리가 없는 자정 날에는 자정선 없이 표를 닫는다', () => {
+    const { container } = renderTail([other]);
+
+    expect(heads(container)).toHaveLength(48);
+    expect(rowCells(container, 0)[47]).toHaveStyle({
+      borderRight: '1px solid #B6B4B0',
+    });
+  });
+
+  it('꼬리 칸을 누르면 표는 선택을 판정하지 않고 칸 번호와 상태를 넘긴다', () => {
+    const onCellClick = jest.fn();
+    const rooms = [tail];
+    const { container } = setup({
+      rooms,
+      slots: buildSlots(rooms, '2099-01-01'),
+      onCellClick,
+    });
+
+    fireEvent.click(rowCells(container, 0)[48]);
+
+    expect(onCellClick).toHaveBeenCalledTimes(1);
+    const [, timeIndex, state] = onCellClick.mock.calls[0];
+    expect(timeIndex).toBe(48);
+    expect(state).toMatchObject({ status: 'free', selectable: true });
+  });
+});
+
 // jsdom 은 레이아웃이 없어 offsetLeft 가 늘 0 이다. 머리글 칸의 위치를 칸 번호로 흉내 내고
 // 스크롤 컨테이너에 들어간 scrollLeft 를 읽어 첫 위치가 어느 칸인지 본다.
 describe('ReservationTimeTable 첫 스크롤 위치', () => {

@@ -139,4 +139,17 @@ describe('SelectionBar 자정 표기', () => {
     );
     expect(getByText('306-1 · 23:00~익일 01:00')).toBeInTheDocument();
   });
+
+  it('꼬리 칸에서 시작한 선택은 시각 앞에 시작일을 적고 같은 날 표기를 쓴다', () => {
+    const { getByText } = render(
+      <SelectionBar
+        {...props({
+          dateLabel: '10월 21일',
+          from: new Date('2026-10-21T00:00:00'),
+          to: new Date('2026-10-21T01:30:00'),
+        })}
+      />,
+    );
+    expect(getByText('306-1 · 10월 21일 00:00~01:30')).toBeInTheDocument();
+  });
 });

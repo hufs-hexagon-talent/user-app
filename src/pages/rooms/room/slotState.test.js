@@ -337,3 +337,100 @@ describe('initialScrollIndex 자정까지 여는 날', () => {
     ).toBe(0);
   });
 });
+
+// 익일 꼬리(B2). 10-20 표의 칸 목록으로 본다. 꼬리 칸은 분이 1440 이상이다.
+describe('getSlotState 익일 꼬리 칸', () => {
+  const D = '2026-10-20';
+  const tail = room({
+    operationStartTime: '00:00:00',
+    operationEndTime: '23:30:00',
+    endsAtMidnight: true,
+    // 10-21 01:30 KST
+    overnightUntil: '2026-10-20T16:30:00Z',
+  });
+  const noTail = room({
+    partitionId: 2,
+    operationStartTime: '00:00:00',
+    operationEndTime: '23:30:00',
+    endsAtMidnight: true,
+    overnightUntil: null,
+  });
+  const slots = buildSlots([tail, noTail], D);
+  const byLabel = (label, nextDay) =>
+    slots.find(slot => slot.label === label && slot.nextDay === nextDay);
+  const stateOf = (r, slot, over = {}) =>
+    getSlotState({
+      slotStart: slot.startAt,
+      slotMinute: slot.startMinute,
+      now: new Date('2026-10-20T22:00:00'),
+      room: r,
+      selection: null,
+      ...over,
+    });
+
+  it('꼬리 칸은 overnightUntil 안이면 열려 있고 누를 수 있다', () => {
+    const s = stateOf(tail, byLabel('00:30', true));
+    expect(s.status).toBe('free');
+    expect(s.selectable).toBe(true);
+  });
+
+  it('overnightUntil 이 null 인 호실은 꼬리 칸을 잠근다', () => {
+    const s = stateOf(noTail, byLabel('00:00', true));
+    expect(s.status).toBe('closed');
+    expect(s.selectable).toBe(false);
+  });
+
+  it('자기 overnightUntil 뒤의 칸은 잠근다', () => {
+    const longer = { ...tail, overnightUntil: '2026-10-20T17:30:00Z' };
+    const wide = buildSlots([tail, longer], D);
+    const at0130 = wide.find(slot => slot.nextDay && slot.label === '01:30');
+    expect(stateOf(tail, at0130).status).toBe('closed');
+    expect(stateOf(longer, at0130).status).toBe('free');
+  });
+
+  it('D 응답에 실린 다음 날 새벽 예약으로 꼬리 칸을 칠한다', () => {
+    const booked = {
+      ...tail,
+      reservationTimeRanges: [
+        {
+          startDateTime: '2026-10-20T15:30:00Z',
+          endDateTime: '2026-10-20T16:30:00Z',
+        },
+      ],
+    };
+    expect(stateOf(booked, byLabel('00:00', true)).status).toBe('free');
+    expect(stateOf(booked, byLabel('00:30', true)).status).toBe('reserved');
+    expect(stateOf(booked, byLabel('01:00', true)).selectable).toBe(false);
+  });
+
+  it('선택 시작부터 최대 시간 안의 꼬리 칸만 연장 범위다', () => {
+    const selection = {
+      partitionId: 1,
+      from: byLabel('23:00', false).startAt,
+      to: byLabel('23:30', false).startAt,
+    };
+    expect(
+      stateOf(tail, byLabel('00:30', true), { selection }).outOfExtendRange,
+    ).toBe(false);
+    expect(
+      stateOf(tail, byLabel('01:00', true), { selection }).outOfExtendRange,
+    ).toBe(true);
+  });
+
+  it('전날에서 넘어온 예약은 00:00·00:30 칸에 칠해진다', () => {
+    const r = {
+      ...tail,
+      reservationTimeRanges: [
+        {
+          // 10-19 23:00 ~ 10-20 01:00 KST
+          startDateTime: '2026-10-19T14:00:00Z',
+          endDateTime: '2026-10-19T16:00:00Z',
+          isMine: true,
+        },
+      ],
+    };
+    expect(stateOf(r, byLabel('00:00', false)).status).toBe('mine');
+    expect(stateOf(r, byLabel('00:30', false)).status).toBe('mine');
+    expect(stateOf(r, byLabel('01:00', false)).status).toBe('past');
+  });
+});

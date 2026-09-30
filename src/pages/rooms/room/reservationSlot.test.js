@@ -220,3 +220,38 @@ describe('isOutsideOperationHours 자정 정책', () => {
     expect(isOutsideOperationHours(510, '09:00:00', '22:00:00')).toBe(true);
   });
 });
+
+// 익일 꼬리 칸도 보통 칸과 같은 규칙으로 고른다. 꼬리 칸 전용 안내는 없고, 자정을 넘는 범위에 남의 예약이
+// 끼면 이 판정이 true 가 되어 RoomPage 가 누른 칸부터 새로 고른다.
+describe('hasReservedSlotInRange 익일 꼬리', () => {
+  // 서버 응답처럼 예약은 문자열, 선택 범위는 Date 로 준다
+  const iso = local => `2099-10-${local}:00`;
+  const at = local => new Date(iso(local));
+
+  it('자정 앞의 남의 예약을 건너 꼬리 칸까지 잇는 범위는 true', () => {
+    const ranges = [
+      { startDateTime: iso('20T23:30'), endDateTime: iso('21T00:00') },
+    ];
+    expect(hasReservedSlotInRange(ranges, at('20T23:00'), at('21T00:30'))).toBe(
+      true,
+    );
+  });
+
+  it('꼬리 안의 남의 예약을 건너는 범위도 true', () => {
+    const ranges = [
+      { startDateTime: iso('21T00:00'), endDateTime: iso('21T00:30') },
+    ];
+    expect(hasReservedSlotInRange(ranges, at('20T23:00'), at('21T01:00'))).toBe(
+      true,
+    );
+  });
+
+  it('꼬리 칸에서 시작한 범위는 그 앞에서 끝나는 자정 넘김 예약과 겹치지 않는다', () => {
+    const ranges = [
+      { startDateTime: iso('20T23:00'), endDateTime: iso('21T00:30') },
+    ];
+    expect(hasReservedSlotInRange(ranges, at('21T00:30'), at('21T01:30'))).toBe(
+      false,
+    );
+  });
+});

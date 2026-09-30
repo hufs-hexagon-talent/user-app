@@ -1,4 +1,4 @@
-import { addMinutes, isValid, parse } from 'date-fns';
+import { addMinutes, differenceInMinutes, isValid, parse } from 'date-fns';
 
 // 예약표의 운영창을 분 단위 숫자로 다룬다. 칸 목록과 호실별 잠금이 이 한 곳의 규칙을 쓴다.
 //
@@ -10,9 +10,15 @@ import { addMinutes, isValid, parse } from 'date-fns';
 //
 // 칸 시각은 'D 00:00 + 분' 으로 만든 Date 다. 'HH:mm' 문자열을 D 와 붙여 다시 읽지 않는다.
 // 그렇게 읽으면 24:00 이나 다음 날로 넘어가는 칸이 D 의 시각이 된다.
+//
+// 익일 꼬리: 자정 정책 호실의 다음 날 일정이 00:00 에 열리면 서버가 overnightUntil(ISO 시각)을 준다.
+// D 23:30 에 시작해 최대 시간만큼 이었을 때의 끝이고, 서버가 자정을 넘는 예약을 받는 가장 늦은 끝과 같다.
+// 표는 23:30 칸 뒤에 D+1 00:00 부터 그 시각까지 칸을 붙인다(분은 1440 을 넘는다). 값이 없으면 꼬리도 없다.
 
 export const SLOT_MINUTES = 30; // 분, 예약 칸 하나
 export const MINUTES_PER_DAY = 1440; // 분
+// 표가 그리는 가장 늦은 끝. 자정을 넘는 예약은 다음 날 안에서 끝나므로 D+2 00:00 을 넘지 않는다.
+const MAX_TABLE_MINUTE = 2 * MINUTES_PER_DAY; // 분
 
 const HM_PATTERN = /^(\d{2}):(\d{2})$/;
 
@@ -55,11 +61,42 @@ export const isSlotInsideWindow = (slotStartMinute, range) =>
   slotStartMinute >= range.startMinute &&
   slotStartMinute + SLOT_MINUTES <= range.endMinute;
 
-// 표 전체의 범위. 가장 이른 시작(30분 격자로 내림)부터 가장 늦은 종료까지다.
+// 호실의 overnightUntil 을 D 0시부터의 분으로 바꾼다. 자정 정책이 아니거나, 값이 없거나,
+// D+1 00:00 보다 늦지 않으면 null 이다(서버 계약상 그때는 null 이지만 값이 와도 꼬리를 만들지 않는다).
+export const overnightUntilMinute = (room, dayStart) => {
+  if (room?.endsAtMidnight !== true || !room.overnightUntil || !dayStart) {
+    return null;
+  }
+  const until = new Date(room.overnightUntil);
+  if (!isValid(until)) return null;
+  const minute = floorToSlot(differenceInMinutes(until, dayStart));
+  if (minute <= MINUTES_PER_DAY) return null;
+  return Math.min(minute, MAX_TABLE_MINUTE);
+};
+
+// 칸을 여는 범위. 운영창 끝(자정) 뒤에 그 호실의 익일 꼬리를 잇는다.
+// 칸 판정은 이 범위 하나로 한다: 칸 시작 ≥ 호실 시작이고 칸 끝 ≤ (overnightUntil ?? 호실 끝).
+export const roomOpenWindow = (room, dayStart) => {
+  const range = roomOperationWindow(room);
+  if (!range) return null;
+  const until = overnightUntilMinute(room, dayStart);
+  return until === null ? range : { ...range, endMinute: until };
+};
+
+// 이 호실에서 닫힌 칸인지. 운영 시작 전·종료 뒤 칸과, 꼬리 가운데 그 호실이 이어 받지 못하는 칸이다.
+// 운영창을 읽을 수 없으면 닫지 않는다.
+export const isSlotClosedForRoom = (room, slotMinute, dayStart) => {
+  const range = roomOpenWindow(room, dayStart);
+  if (!range || !Number.isFinite(slotMinute)) return false;
+  return !isSlotInsideWindow(slotMinute, range);
+};
+
+// 표 전체의 범위. 가장 이른 시작(30분 격자로 내림)부터 가장 늦은 끝까지다.
+// 익일 꼬리가 있는 호실이 하나라도 있으면 가장 늦은 overnightUntil 까지 간다.
 // 호실마다 다른 부분은 칸 잠금이 가린다.
-export const tableOperationWindow = rooms => {
+export const tableOperationWindow = (rooms, dayStart) => {
   const ranges = (Array.isArray(rooms) ? rooms : [])
-    .map(roomOperationWindow)
+    .map(room => roomOpenWindow(room, dayStart))
     .filter(Boolean);
   if (ranges.length === 0) return null;
   const startMinute = floorToSlot(
@@ -108,10 +145,10 @@ export const dayStartOf = date => {
 export const slotDate = (dayStart, minute) => addMinutes(dayStart, minute);
 
 // 응답의 호실들로 표의 칸 목록을 만든다. 칸마다 분과 절대 시각을 함께 갖고 있어서
-// 표·선택·전송이 문자열을 다시 읽지 않는다.
+// 표·선택·전송이 문자열을 다시 읽지 않는다. nextDay 는 익일 꼬리 칸(분 ≥ 1440)이다.
 export const buildSlots = (rooms, date) => {
-  const range = tableOperationWindow(rooms);
   const dayStart = dayStartOf(date);
+  const range = tableOperationWindow(rooms, dayStart);
   if (!range || !dayStart) return [];
 
   const boundaries = slotBoundaries(range.startMinute, range.endMinute);
@@ -125,6 +162,7 @@ export const buildSlots = (rooms, date) => {
       endAt: slotDate(dayStart, endMinute),
       label: minuteLabel(startMinute),
       endLabel: endMinuteLabel(endMinute),
+      nextDay: startMinute >= MINUTES_PER_DAY,
     };
   });
 };

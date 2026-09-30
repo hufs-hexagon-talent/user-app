@@ -5,8 +5,7 @@ import {
   format,
 } from 'date-fns';
 
-import { SLOT_MINUTES } from './operationWindow';
-import { isOutsideOperationHours } from './reservationSlot';
+import { isSlotClosedForRoom, SLOT_MINUTES } from './operationWindow';
 
 // 오늘이 아닌 날의 첫 화면. 00:00 부터 여는 날에 첫 칸부터 보이면 393px 에서 18칸(약 790px)을
 // 밀어야 해서, 표가 이보다 일찍 시작하는 날에는 이 칸에서 시작한다.
@@ -14,6 +13,7 @@ export const FIRST_VISIBLE_MINUTE = 9 * 60; // 분, 09:00
 
 // 칸 하나의 상태를 낸다. 시각 표현은 하지 않고 판정만 한다.
 // slotMinute 은 칸 시작이 선택한 날 0시부터 몇 분인지다. 주지 않으면 slotStart 의 시각으로 본다.
+// 익일 꼬리 칸은 1440 이상이다. 꼬리 칸도 열려 있으면 보통 칸처럼 누를 수 있고, 거기서 새 선택을 시작할 수도 있다.
 export const getSlotState = ({
   slotStart,
   slotMinute,
@@ -22,13 +22,14 @@ export const getSlotState = ({
   selection,
 }) => {
   const slotEnd = addMinutes(slotStart, SLOT_MINUTES);
+  const minute =
+    slotMinute ?? slotStart.getHours() * 60 + slotStart.getMinutes();
 
-  // 칸 전체가 그 호실의 운영창 안일 때만 연다. 표의 공통 범위가 아니라 호실별로 본다.
-  const closed = isOutsideOperationHours(
-    slotMinute ?? slotStart.getHours() * 60 + slotStart.getMinutes(),
-    room.operationStartTime,
-    room.operationEndTime,
-    room.endsAtMidnight,
+  // 칸 전체가 그 호실의 운영창(익일 꼬리 포함) 안일 때만 연다. 표의 공통 범위가 아니라 호실별로 본다.
+  const closed = isSlotClosedForRoom(
+    room,
+    minute,
+    addMinutes(slotStart, -minute),
   );
   const past = now > slotEnd;
   // 이 칸을 덮는 예약들. 한 칸을 덮는 예약이 여럿일 수 있어 목록으로 둔다.
