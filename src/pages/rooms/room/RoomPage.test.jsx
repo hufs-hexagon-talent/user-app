@@ -481,3 +481,303 @@ describe('예약 확인 모달', () => {
     expect(reserveModalTheme.content.base).toMatch(/\bfocus:outline-none\b/);
   });
 });
+
+// 24시간 운영 작업(칸 모델을 분 단위로 바꾸는 리팩터링) 전에 지금 동작을 고정해 둔다.
+// 픽스처는 모두 옛 서버 응답 모양이라 endsAtMidnight 가 없다. 새 화면이 옛 API 를 만나도
+// 이 표들은 그대로여야 한다.
+describe('평상 날과 옛 서버 응답(새 필드 없음)의 예약표', () => {
+  const partition = (over = {}) => ({
+    partitionId: 11,
+    roomName: '306',
+    partitionNumber: 1,
+    operationStartTime: '09:00:00',
+    operationEndTime: '22:00:00',
+    eachMaxMinute: 120,
+    reservationTimeRanges: [],
+    ...over,
+  });
+  const other = (over = {}) =>
+    partition({ partitionId: 21, roomName: '428', ...over });
+
+  const renderWith = rooms => {
+    useReservations.mockReturnValue(query({ data: rooms }));
+    return render(<RoomPage />);
+  };
+
+  const headCells = container =>
+    Array.from(container.querySelectorAll('thead [data-time-index]'));
+
+  const rowCells = (container, label) => {
+    const row = Array.from(container.querySelectorAll('tbody tr')).find(
+      tr => tr.querySelector('th')?.textContent === label,
+    );
+    return Array.from(row.querySelectorAll('[data-time-index]'));
+  };
+
+  const cellLabel = (container, label, hm) =>
+    rowCells(container, label)
+      .map(cell => cell.getAttribute('aria-label'))
+      .find(name => name.startsWith(`${label} ${hm} `));
+
+  it('09:00~22:00 인 날은 스물여섯 칸이고 머리글은 정시마다 적는다', () => {
+    const { container } = renderWith([partition(), other()]);
+
+    const heads = headCells(container);
+    expect(heads).toHaveLength(26);
+    expect(heads[0]).toHaveAttribute('aria-label', '09:00~09:30');
+    expect(heads[25]).toHaveAttribute('aria-label', '21:30~22:00');
+    expect(heads.map(cell => cell.textContent).filter(Boolean)).toEqual([
+      '09:00',
+      '10:00',
+      '11:00',
+      '12:00',
+      '13:00',
+      '14:00',
+      '15:00',
+      '16:00',
+      '17:00',
+      '18:00',
+      '19:00',
+      '20:00',
+      '21:00',
+    ]);
+
+    const cells = rowCells(container, '306-1');
+    expect(cells).toHaveLength(26);
+    expect(cells[0]).toHaveAttribute('aria-label', '306-1 09:00 예약 가능');
+    expect(cells[25]).toHaveAttribute('aria-label', '306-1 21:30 예약 가능');
+    expect(rowCells(container, '428-1')).toHaveLength(26);
+  });
+
+  it('호실마다 종료가 다르면 늦은 쪽까지 그리고 일찍 닫는 호실의 남은 칸은 잠근다', () => {
+    const { container } = renderWith([
+      partition(),
+      other({ operationEndTime: '18:00:00' }),
+    ]);
+
+    expect(headCells(container)).toHaveLength(26);
+    expect(cellLabel(container, '428-1', '17:30')).toBe(
+      '428-1 17:30 예약 가능',
+    );
+    expect(cellLabel(container, '428-1', '18:00')).toBe(
+      '428-1 18:00 예약 불가',
+    );
+    expect(cellLabel(container, '306-1', '21:30')).toBe(
+      '306-1 21:30 예약 가능',
+    );
+  });
+
+  it('00:00~23:30 호실과 평상 호실이 섞인 날은 00:00 부터 23:30 까지 그리고 호실별로 잠근다', () => {
+    const { container } = renderWith([
+      partition({
+        operationStartTime: '00:00:00',
+        operationEndTime: '23:30:00',
+      }),
+      other(),
+    ]);
+
+    const heads = headCells(container);
+    expect(heads).toHaveLength(47);
+    expect(heads[0]).toHaveAttribute('aria-label', '00:00~00:30');
+    expect(heads[46]).toHaveAttribute('aria-label', '23:00~23:30');
+    expect(cellLabel(container, '306-1', '00:00')).toBe(
+      '306-1 00:00 예약 가능',
+    );
+    expect(cellLabel(container, '306-1', '23:00')).toBe(
+      '306-1 23:00 예약 가능',
+    );
+    expect(cellLabel(container, '428-1', '08:30')).toBe(
+      '428-1 08:30 예약 불가',
+    );
+    expect(cellLabel(container, '428-1', '09:00')).toBe(
+      '428-1 09:00 예약 가능',
+    );
+    expect(cellLabel(container, '428-1', '22:00')).toBe(
+      '428-1 22:00 예약 불가',
+    );
+  });
+
+  it('종료가 23:59:59 인 옛 정책은 23:00~23:30 이 마지막 칸이다', () => {
+    const { container } = renderWith([
+      partition({ operationEndTime: '23:59:59' }),
+    ]);
+
+    const heads = headCells(container);
+    expect(heads).toHaveLength(29);
+    expect(heads[28]).toHaveAttribute('aria-label', '23:00~23:30');
+    expect(cellLabel(container, '306-1', '23:00')).toBe(
+      '306-1 23:00 예약 가능',
+    );
+  });
+
+  it('평상 날 마지막 두 칸을 고르면 하단 바·확인 모달·전송 시각이 그날 21:00~22:00 이다', () => {
+    const doReserve = jest.fn().mockResolvedValue({});
+    useReserve.mockReturnValue({ mutateAsync: doReserve, isPending: false });
+    const { container } = renderWith([partition(), other()]);
+
+    const cells = rowCells(container, '306-1');
+    fireEvent.click(cells[24]);
+    fireEvent.click(cells[25]);
+
+    expect(screen.getByText('306-1 · 21:00~22:00')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByText('예약하기')[0]);
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('21:00')).toBeInTheDocument();
+    expect(within(dialog).getByText('22:00')).toBeInTheDocument();
+    expect(within(dialog).getByText(durationLabel(60))).toBeInTheDocument();
+    expect(within(dialog).getByRole('group')).toHaveAttribute(
+      'aria-label',
+      `${shortDateLabel('2099-01-01')} 21:00부터 22:00까지, ${durationLabel(60)}`,
+    );
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '예약' }));
+
+    expect(doReserve).toHaveBeenCalledTimes(1);
+    const body = doReserve.mock.calls[0][0];
+    expect(body.roomPartitionId).toBe(11);
+    // 서버는 절대 시각을 받는다. KST 21:00 은 UTC 12:00 이다.
+    expect(body.startDateTime.toISOString()).toBe('2099-01-01T12:00:00.000Z');
+    expect(body.endDateTime.toISOString()).toBe('2099-01-01T13:00:00.000Z');
+  });
+});
+
+// 새 서버는 자정까지 여는 정책을 endsAtMidnight=true 와 저장 종료 23:30:00 으로 준다.
+describe('자정(24:00)까지 여는 날의 예약표', () => {
+  const midnight = (over = {}) => ({
+    partitionId: 11,
+    roomName: '306',
+    partitionNumber: 1,
+    operationStartTime: '00:00:00',
+    operationEndTime: '23:30:00',
+    endsAtMidnight: true,
+    eachMaxMinute: 120,
+    reservationTimeRanges: [],
+    ...over,
+  });
+  const plain = (over = {}) => ({
+    partitionId: 21,
+    roomName: '428',
+    partitionNumber: 1,
+    operationStartTime: '09:00:00',
+    operationEndTime: '22:00:00',
+    endsAtMidnight: false,
+    eachMaxMinute: 120,
+    reservationTimeRanges: [],
+    ...over,
+  });
+
+  const renderWith = rooms => {
+    useReservations.mockReturnValue(query({ data: rooms }));
+    return render(<RoomPage />);
+  };
+  const headCells = container =>
+    Array.from(container.querySelectorAll('thead [data-time-index]'));
+  const rowCells = (container, label) => {
+    const row = Array.from(container.querySelectorAll('tbody tr')).find(
+      tr => tr.querySelector('th')?.textContent === label,
+    );
+    return Array.from(row.querySelectorAll('[data-time-index]'));
+  };
+
+  it('00:00~24:00 마흔여덟 칸이고 마지막 칸은 23:30~24:00 이다', () => {
+    const { container } = renderWith([midnight()]);
+
+    const heads = headCells(container);
+    expect(heads).toHaveLength(48);
+    expect(heads[47]).toHaveAttribute('aria-label', '23:30~24:00');
+    expect(rowCells(container, '306-1')[47]).toHaveAttribute(
+      'aria-label',
+      '306-1 23:30 예약 가능',
+    );
+  });
+
+  it('새 서버가 false 를 준 00:00~23:30 은 지금처럼 마흔일곱 칸이다', () => {
+    const { container } = renderWith([midnight({ endsAtMidnight: false })]);
+
+    const heads = headCells(container);
+    expect(heads).toHaveLength(47);
+    expect(heads[46]).toHaveAttribute('aria-label', '23:00~23:30');
+  });
+
+  it('평상 호실과 섞이면 표는 24:00 까지 그리고 평상 호실의 밤 칸은 잠근다', () => {
+    const { container } = renderWith([midnight(), plain()]);
+
+    expect(headCells(container)).toHaveLength(48);
+    const plainCells = rowCells(container, '428-1');
+    expect(plainCells[47]).toHaveAttribute(
+      'aria-label',
+      '428-1 23:30 예약 불가',
+    );
+    expect(plainCells[44]).toHaveAttribute(
+      'aria-label',
+      '428-1 22:00 예약 불가',
+    );
+    expect(plainCells[17]).toHaveAttribute(
+      'aria-label',
+      '428-1 08:30 예약 불가',
+    );
+    expect(plainCells[18]).toHaveAttribute(
+      'aria-label',
+      '428-1 09:00 예약 가능',
+    );
+
+    // 잠긴 칸은 눌러도 선택되지 않는다(하단 바의 예약하기가 생기지 않는다)
+    fireEvent.click(plainCells[47]);
+    expect(screen.queryAllByText('예약하기')).toHaveLength(1);
+  });
+
+  it('23:30 칸을 고르면 하단 바·확인 모달은 24:00 으로 적고 끝은 다음 날 00:00 으로 보낸다', () => {
+    const doReserve = jest.fn().mockResolvedValue({});
+    useReserve.mockReturnValue({ mutateAsync: doReserve, isPending: false });
+    const { container } = renderWith([midnight(), plain()]);
+
+    fireEvent.click(rowCells(container, '306-1')[47]);
+
+    expect(screen.getByText('306-1 · 23:30~24:00')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByText('예약하기')[0]);
+    const dialog = screen.getByRole('dialog');
+    // 날짜는 선택한 예약이 시작하는 날이다. 이 표에서는 선택이 늘 selectedDate 에서 시작하므로
+    // 두 값을 구분하지 못한다. 자정을 넘는 선택의 날짜는 이어 붙이는 칸을 다루는 테스트가 고정한다.
+    expect(
+      within(dialog).getByText(shortDateLabel('2099-01-01')),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText('23:30')).toBeInTheDocument();
+    expect(within(dialog).getByText('24:00')).toBeInTheDocument();
+    expect(within(dialog).queryByText('00:00')).toBeNull();
+    expect(within(dialog).getByRole('group')).toHaveAttribute(
+      'aria-label',
+      `${shortDateLabel('2099-01-01')} 23:30부터 24:00까지, ${durationLabel(30)}`,
+    );
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '예약' }));
+
+    expect(doReserve).toHaveBeenCalledTimes(1);
+    const body = doReserve.mock.calls[0][0];
+    expect(body.roomPartitionId).toBe(11);
+    expect(body.startDateTime.toISOString()).toBe('2099-01-01T14:30:00.000Z');
+    // D+1 00:00 KST = D 15:00Z
+    expect(body.endDateTime.toISOString()).toBe('2099-01-01T15:00:00.000Z');
+  });
+
+  it('23:00 과 23:30 을 이어 고르면 23:00~24:00 한 건이다', () => {
+    const doReserve = jest.fn().mockResolvedValue({});
+    useReserve.mockReturnValue({ mutateAsync: doReserve, isPending: false });
+    const { container } = renderWith([midnight()]);
+
+    const cells = rowCells(container, '306-1');
+    fireEvent.click(cells[46]);
+    fireEvent.click(cells[47]);
+
+    expect(screen.getByText('306-1 · 23:00~24:00')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('예약하기')[0]);
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: '예약' }),
+    );
+
+    const body = doReserve.mock.calls[0][0];
+    expect(body.startDateTime.toISOString()).toBe('2099-01-01T14:00:00.000Z');
+    expect(body.endDateTime.toISOString()).toBe('2099-01-01T15:00:00.000Z');
+  });
+});

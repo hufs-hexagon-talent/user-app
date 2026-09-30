@@ -16,6 +16,13 @@ import { Table, Checkbox, Modal, Button } from 'flowbite-react';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
 import 'react-datepicker/dist/react-datepicker.css';
 import { FaFileExcel } from 'react-icons/fa6';
+import { endTimeLabel } from '../../../utils/reservationTimeLabel';
+
+// 달력에서 고른 날의 KST 0시(절대 시각). 서버가 하루 경계를 Asia/Seoul 로 고정하므로 여기서도
+// KST 로 자른다. 예전에는 'yyyy-MM-ddT00:00:00Z' 로 보내 [D 09:00, D+1 09:00) KST 를 물어서
+// 새벽 예약이 전날 목록에 떴다.
+const kstDayStart = date =>
+  new Date(`${format(date, 'yyyy-MM-dd')}T00:00:00+09:00`).toISOString();
 
 const ReservationState = () => {
   const navigate = useNavigate();
@@ -50,15 +57,10 @@ const ReservationState = () => {
     );
   };
 
-  // UTC 변환 함수
-  const toISODateUTC = date => {
-    return format(date, "yyyy-MM-dd'T'00:00:00'Z'");
-  };
-
   // 예약 목록 refetch 함수
   const refetchReservations = async () => {
-    const startDateTime = toISODateUTC(selectedDate);
-    const endDateTime = toISODateUTC(addDays(selectedDate, 1));
+    const startDateTime = kstDayStart(selectedDate);
+    const endDateTime = kstDayStart(addDays(selectedDate, 1));
 
     const res = await reservationSearch({
       startDateTime,
@@ -116,8 +118,8 @@ const ReservationState = () => {
   // 호실 선택이 바뀌면 페이지 초기화
   useEffect(() => {
     const fetchReservations = async () => {
-      const startDateTime = toISODateUTC(selectedDate);
-      const endDateTime = toISODateUTC(addDays(selectedDate, 1));
+      const startDateTime = kstDayStart(selectedDate);
+      const endDateTime = kstDayStart(addDays(selectedDate, 1));
 
       try {
         const res = await reservationSearch({
@@ -262,7 +264,10 @@ const ReservationState = () => {
                     )}
                   </Table.Cell>
                   <Table.Cell>
-                    {format(new Date(reservation.reservationEndTime), 'HH:mm')}
+                    {endTimeLabel(
+                      reservation.reservationStartTime,
+                      reservation.reservationEndTime,
+                    )}
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -321,12 +326,14 @@ const ReservationState = () => {
               <Button
                 color="dark"
                 onClick={() => {
+                  // 경계만 KST 0시로 바로잡는다. 종료일을 포함하지 않는 지금 범위와 파일 이름
+                  // (종료 경계의 날짜를 쓴다)은 그대로 둔다.
                   const params = {
                     states: selectedRoles,
                     startDateTime: startDate
-                      ? toISODateUTC(startDate)
+                      ? kstDayStart(startDate)
                       : undefined,
-                    endDateTime: endDate ? toISODateUTC(endDate) : undefined,
+                    endDateTime: endDate ? kstDayStart(endDate) : undefined,
                   };
                   useExportReservationExcel(params); // 엑셀 내보내기 API 호출
                   setOpenExportModal(false);

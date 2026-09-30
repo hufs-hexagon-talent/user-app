@@ -174,3 +174,49 @@ describe('createTimeTable', () => {
     expect(times).toHaveLength(27);
   });
 });
+
+describe('createTimeTable 자정', () => {
+  it('종료가 24:00 이면 48칸이고 마지막 칸은 23:30~24:00 이다', () => {
+    const times = createTimeTable({
+      startTime: { hour: 0, minute: 0 },
+      endTime: { hour: 24, minute: 0 },
+      intervalMinute: 30,
+    });
+
+    // 경계 49개 = 칸 48개
+    expect(times).toHaveLength(49);
+    expect(times[times.length - 1]).toBe('24:00');
+    expect(times[times.length - 2]).toBe('23:30');
+  });
+
+  it('00:00~23:59 는 지금처럼 47칸이다', () => {
+    const times = createTimeTable({
+      startTime: { hour: 0, minute: 0 },
+      endTime: { hour: 23, minute: 59 },
+      intervalMinute: 30,
+    });
+
+    expect(times).toHaveLength(48);
+    expect(times[times.length - 1]).toBe('23:30');
+  });
+});
+
+describe('isOutsideOperationHours 자정 정책', () => {
+  it('endsAtMidnight 면 저장 종료 23:30 이어도 23:30 칸을 연다', () => {
+    expect(isOutsideOperationHours('23:30', '00:00:00', '23:30:00', true)).toBe(
+      false,
+    );
+  });
+
+  it('플래그가 없으면 23:30 칸은 잠근다', () => {
+    expect(isOutsideOperationHours('23:30', '00:00:00', '23:30:00')).toBe(true);
+    expect(isOutsideOperationHours('23:30', '09:00:00', '23:59:59')).toBe(true);
+  });
+
+  it('칸 시작을 분으로 받아도 같다', () => {
+    expect(isOutsideOperationHours(1410, '00:00:00', '23:30:00', true)).toBe(
+      false,
+    );
+    expect(isOutsideOperationHours(510, '09:00:00', '22:00:00')).toBe(true);
+  });
+});

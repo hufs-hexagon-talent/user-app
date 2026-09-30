@@ -21,6 +21,8 @@ const POLICY_ERROR_MESSAGES = {
   'POLICY-001': '해당 정책을 찾을 수 없습니다. 목록을 새로 고쳐 주세요.',
   'POLICY-002': '같은 조건의 정책이 이미 있습니다.',
   'POLICY-004': '시작 시각이 종료 시각보다 앞서야 합니다.',
+  'POLICY-005':
+    '자정까지 운영하는 정책은 종료 시각을 바꿀 수 없습니다. 자정 운영을 먼저 끄세요.',
   'CLIENT-001': '입력한 값의 형식을 확인해 주세요.',
   // 정책 삭제는 서버가 미리 막지 않고 DB FK 가 잡는다. 그 위반을 GlobalExceptionHandler 가
   // 409 CLIENT-009 로 내린다. status === 409 로 보면 안 된다 — POLICY-002 도 409 라 묻힌다.
@@ -75,4 +77,22 @@ export const policyErrorMessage = (error, fallback) => {
   const code = data?.code;
   const normalized = typeof code === 'string' ? code.trim() : null;
   return POLICY_ERROR_MESSAGES[normalized] || fallback;
+};
+
+// 자정(24:00) 운영을 켜거나 끈 요청이 실제로 반영됐는지 응답으로 확인한다.
+// 옛 서버는 모르는 필드를 무시하고 200 을 주므로 성공 응답만으로는 알 수 없다.
+// 응답에 endsAtMidnight 가 없으면 옛 서버라 꺼진 것으로 본다.
+export const MIDNIGHT_UNSUPPORTED_MESSAGE =
+  '서버가 아직 자정 운영을 지원하지 않습니다. 이 정책은 23:30 에 닫힙니다.';
+
+export const MIDNIGHT_NOT_CLEARED_MESSAGE =
+  '자정 운영이 꺼지지 않았습니다. 목록을 새로 고쳐 확인해 주세요.';
+
+// sent: 요청에 실은 endsAtMidnight. 보내지 않았으면(undefined) 확인하지 않는다.
+// saved: 응답의 정책(OperationPolicyInfoResponse).
+export const midnightMismatchMessage = (sent, saved) => {
+  if (typeof sent !== 'boolean') return null;
+  const applied = saved?.endsAtMidnight === true;
+  if (applied === sent) return null;
+  return sent ? MIDNIGHT_UNSUPPORTED_MESSAGE : MIDNIGHT_NOT_CLEARED_MESSAGE;
 };

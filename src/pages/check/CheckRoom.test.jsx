@@ -578,3 +578,115 @@ describe('출석 문의 진입점', () => {
     );
   });
 });
+
+// 24시간 운영 작업 전에 같은 날 끝나는 예약의 표기를 고정해 둔다. 자정 표기를 더해도 이 줄은 그대로다.
+describe('같은 날 끝나는 예약의 시각 표기', () => {
+  const cellTexts = row =>
+    Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
+
+  test('내 예약 표는 날짜·시작·종료를 그대로 적는다', () => {
+    useUserReservation.mockReturnValue(loaded([reservation(1)]));
+    renderCheck();
+
+    const row = screen.getByText('세미나실-1').closest('tr');
+    expect(cellTexts(row).slice(1, 5)).toEqual([
+      '세미나실-1',
+      '01-01',
+      '10:00',
+      '11:00',
+    ]);
+    expect(
+      screen.getByRole('button', {
+        name: '2099-01-01 10:00~11:00 세미나실-1 예약 취소',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test('미출석 표도 날짜·시작·종료를 그대로 적는다', () => {
+    const missed = reservation(3, {
+      reservationStartTime: '2020-01-01T10:00:00',
+      reservationEndTime: '2020-01-01T11:00:00',
+    });
+    useNoShow.mockReturnValue(loaded(noShowOf(1, [missed])));
+    renderCheck();
+    openNoShowPopover();
+
+    const row = within(screen.getByRole('presentation'))
+      .getByText('세미나실-1')
+      .closest('tr');
+    expect(cellTexts(row).slice(1, 5)).toEqual([
+      '2020-01-01',
+      '세미나실-1',
+      '10:00',
+      '11:00',
+    ]);
+  });
+});
+
+describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
+  const cellTexts = row =>
+    Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
+
+  test('자정에 끝나면 종료를 24:00 으로 적는다', () => {
+    useUserReservation.mockReturnValue(
+      loaded([
+        reservation(1, {
+          reservationStartTime: '2099-10-20T23:30:00+09:00',
+          reservationEndTime: '2099-10-21T00:00:00+09:00',
+        }),
+      ]),
+    );
+    renderCheck();
+
+    const row = screen.getByText('세미나실-1').closest('tr');
+    expect(cellTexts(row).slice(2, 5)).toEqual(['10-20', '23:30', '24:00']);
+    expect(
+      screen.getByRole('button', {
+        name: '2099-10-20 23:30~24:00 세미나실-1 예약 취소',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test('다음 날에 끝나면 날짜는 시작일이고 종료는 익일 캡션과 시각 두 줄이다', () => {
+    useUserReservation.mockReturnValue(
+      loaded([
+        reservation(1, {
+          reservationStartTime: '2099-10-20T23:00:00+09:00',
+          reservationEndTime: '2099-10-21T01:00:00+09:00',
+        }),
+      ]),
+    );
+    renderCheck();
+
+    const row = screen.getByText('세미나실-1').closest('tr');
+    const endCell = row.querySelectorAll('td')[4];
+    expect(cellTexts(row).slice(2, 4)).toEqual(['10-20', '23:00']);
+    expect(within(endCell).getByText('익일')).toBeInTheDocument();
+    expect(within(endCell).getByText('01:00')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: '2099-10-20 23:00~익일 01:00 세미나실-1 예약 취소',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test('미출석 표도 같은 규칙으로 종료를 적는다', () => {
+    const missed = reservation(3, {
+      reservationStartTime: '2020-10-20T23:30:00+09:00',
+      reservationEndTime: '2020-10-21T00:00:00+09:00',
+    });
+    useNoShow.mockReturnValue(loaded(noShowOf(1, [missed])));
+    renderCheck();
+    openNoShowPopover();
+
+    const row = within(screen.getByRole('presentation'))
+      .getByText('세미나실-1')
+      .closest('tr');
+    expect(cellTexts(row).slice(1, 5)).toEqual([
+      '2020-10-20',
+      '세미나실-1',
+      '23:30',
+      '24:00',
+    ]);
+  });
+});

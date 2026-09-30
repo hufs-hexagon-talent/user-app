@@ -11,6 +11,7 @@ import { useAllPolicies } from '../../../../api/roomOperationPolicy.api';
 import { Table, Checkbox, Modal, Button } from 'flowbite-react';
 import { useCustomSnackbars } from '../../../../components/snackbar/SnackBar';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
+import { operationEndTimeLabel } from '../../../../utils/reservationTimeLabel';
 
 const Schedule = () => {
   const navigate = useNavigate();
@@ -149,7 +150,7 @@ const Schedule = () => {
                   {schedule.operationStartTime}
                 </Table.Cell>
                 <Table.Cell className="text-lg">
-                  {schedule.operationEndTime}
+                  {operationEndTimeLabel(schedule)}
                 </Table.Cell>
                 <Table.Cell className="text-lg">
                   {schedule.eachMaxMinute}
@@ -212,7 +213,7 @@ const Schedule = () => {
                           value={policy.roomOperationPolicyId}>
                           정책 {policy.roomOperationPolicyId} (
                           {policy.operationStartTime} -{' '}
-                          {policy.operationEndTime})
+                          {operationEndTimeLabel(policy)})
                         </option>
                       ))}
                     </select>

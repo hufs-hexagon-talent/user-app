@@ -8,13 +8,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { Typography } from '@mui/material';
-import {
-  addMinutes,
-  format,
-  parse,
-  isBefore,
-  differenceInMinutes,
-} from 'date-fns';
+import { addMinutes, format, isBefore, differenceInMinutes } from 'date-fns';
 
 import Banner from '../../admin/banner/Banner';
 import { ko } from 'date-fns/locale';
@@ -26,7 +20,6 @@ import useUrlQuery from '../../../hooks/useUrlQuery';
 import useAuth from '../../../hooks/useAuth';
 import { fetchBlockedPeriod, isAuthError } from '../../../api/user.api';
 import {
-  createTimeTable,
   getReserveErrorMessage,
   hasReservedSlotInRange,
   isOutsideOperationHours,
@@ -35,7 +28,7 @@ import {
   RESERVE_AUTH_FAILED_MESSAGE,
 } from './reservationSlot';
 import ReservationTimeTable from './ReservationTimeTable';
-import { SLOT_INTERVAL_MINUTE } from './slotState';
+import { buildSlots } from './operationWindow';
 import TimeTableLegend from './TimeTableLegend';
 import SelectionBar from './SelectionBar';
 import CustomButton from '../../../components/button/Button';
@@ -45,6 +38,7 @@ import { durationLabel } from './durationLabel';
 import { shortDateLabel } from './dateLabel';
 import { modalTheme } from '../../../components/modal/modalTheme';
 import BooEmptyState from '../../../components/BooEmptyState';
+import { clockLabel, endTimeLabel } from '../../../utils/reservationTimeLabel';
 
 // 취소·예약 버튼(flowbite Button, node_modules/flowbite-react/dist/esm/components/Button/theme.mjs)
 // 의 색은 theme.color 를 통째로 바꾼다 — className 으로 hover 색만 덧붙이면 theme.color.light/
@@ -95,12 +89,6 @@ const RoomPage = () => {
   // 빈 배열을 그대로 includeDates 에 주면 react-datepicker 가 "허용 날짜 0개" 로 읽어
   // 35칸이 전부 잠기고 월 이동 화살표까지 사라져 학생이 아무것도 할 수 없다.
   const [availableDate, setAvailableDate] = useState(null);
-  const [earliestStartTime, setEarliestStartTime] = useState(null);
-  const [startHour, setStartHour] = useState(null);
-  const [startMinute, setStartMinute] = useState(null);
-  const [endHour, setEndHour] = useState(null);
-  const [endMinute, setEndMinute] = useState(null);
-  const [maxReservationMinute, setMaxReservationMinute] = useState(null);
   const [openReserveModal, setOpenReserveModal] = useState(false);
   // 모달이 열리며 닫기 버튼에 자동 포커스가 가면 마우스 사용자에게도 focus-visible 링이
   // 보인다(flowbite Modal 이 FloatingFocusManager 로 initialFocus 대상에 포커스를 준다).
@@ -157,43 +145,6 @@ const RoomPage = () => {
     }
   }, [now, selectedRangeFrom]);
 
-  useEffect(() => {
-    if (reservationsByRooms && reservationsByRooms.length > 0) {
-      const startTimes = reservationsByRooms?.map(
-        room => room.operationStartTime,
-      );
-      // operationStartTime들에서 서로 비교해서 제일 작은 값이 earliest가 되게
-      const earliestTime = startTimes.reduce((earliest, current) => {
-        return earliest < current ? earliest : current;
-      });
-      setEarliestStartTime(earliestTime);
-
-      // ':' 분리해서 시와 분으로 나눠서 저장
-      const [startHour, startMinute] = earliestTime.split(':');
-      setStartHour(parseInt(startHour, 10));
-      setStartMinute(parseInt(startMinute, 10));
-
-      const endTimes = reservationsByRooms?.map(room => room.operationEndTime);
-
-      // operationEndTime들에서 서로 비교해서 제일 큰 값이 latest가 되게
-      const latestTime = endTimes.reduce((latest, current) => {
-        return latest > current ? latest : current;
-      });
-      // ':' 분리해서 시와 분으로 나눠서 저장
-      const [endHour, endMinute] = latestTime.split(':');
-      setEndHour(parseInt(endHour, 10));
-      setEndMinute(parseInt(endMinute, 10));
-
-      // eachMaxMinute들을 배열로 저장
-      const eachMaxMinutes = reservationsByRooms?.map(
-        partition => partition.eachMaxMinute,
-      );
-      // 배열들 중에 가장 큰 값을 maxEachMaxMinute으로 저장
-      const maxEachMaxMinute = Math.max(...eachMaxMinutes);
-      setMaxReservationMinute(maxEachMaxMinute);
-    }
-  }, [reservationsByRooms]);
-
   // 날짜 변경 시 기존 선택 초기화.
   // 예약 현황은 30초마다 다시 불러오므로 조회 결과가 아니라 날짜에만 반응해야
   // 남이 예약하는 순간 학생이 고르던 칸이 풀리지 않는다.
@@ -203,26 +154,11 @@ const RoomPage = () => {
     selSelectedRangeTo(null);
   }, [selectedDate]);
 
-  // 계산해놓은 시간들을 timeTableConfig에 객체로 선언
-  const timeTableConfig = {
-    startTime: {
-      hour: startHour,
-      minute: startMinute,
-    },
-    endTime: {
-      hour: endHour,
-      minute: endMinute,
-    },
-    intervalMinute: SLOT_INTERVAL_MINUTE,
-    maxReservationMinute: maxReservationMinute,
-  };
-
-  const times = useMemo(
-    () =>
-      startHour !== null && startMinute !== null
-        ? createTimeTable(timeTableConfig)
-        : [],
-    [startHour, startMinute, endHour, endMinute, maxReservationMinute],
+  // 표의 칸 목록은 응답에서 바로 만든다. effect 로 범위를 state 에 옮겨 두면 한 렌더 늦어서
+  // 날짜를 바꾼 첫 렌더가 이전 날의 범위로 그려진다. 칸마다 분과 절대 시각을 함께 갖는다.
+  const slots = useMemo(
+    () => buildSlots(reservationsByRooms, selectedDate),
+    [reservationsByRooms, selectedDate],
   );
 
   // date-picker에서 날짜 선택할 때마다 실행되는 함수
@@ -236,16 +172,9 @@ const RoomPage = () => {
 
   // 슬롯의 상태 토글하는 함수
   const toggleSlot = useCallback(
-    (partition, time) => {
-      const targetStartAt = parse(
-        `${selectedDate} ${time}`,
-        'yyyy-MM-dd HH:mm',
-        new Date(),
-      );
-      const targetEndAt = addMinutes(
-        targetStartAt,
-        timeTableConfig.intervalMinute,
-      );
+    (partition, slot) => {
+      const targetStartAt = slot.startAt;
+      const targetEndAt = slot.endAt;
 
       const isFirstSelect = !selectedRangeFrom && !selectedRangeTo;
       // 예약 현황은 30초마다 다시 불러온다. 남이 예약하면 그 방 객체만 새 참조로 바뀌므로
@@ -304,7 +233,6 @@ const RoomPage = () => {
       selSelectedRangeTo(targetEndAt);
     },
     [
-      selectedDate,
       setSelectedRangeFrom,
       selSelectedRangeTo,
       selectedRoom,
@@ -395,31 +323,29 @@ const RoomPage = () => {
   // 최대 예약 시간에 부합하는지 계산하는 함수
   const handleCellClick = useCallback(
     (partition, timeIndex) => {
-      const slotDateFrom = parse(
-        `${selectedDate} ${times[timeIndex]}`,
-        'yyyy-MM-dd HH:mm',
-        new Date(),
-      );
+      const slot = slots[timeIndex];
+      if (!slot) return;
 
       // 갱신 주기 사이에 지나가 버린 칸이 눌리지 않게 클릭 시점으로 한 번 더 확인한다
       const clickedAt = new Date();
-      if (clickedAt > addMinutes(slotDateFrom, SLOT_INTERVAL_MINUTE)) {
+      if (clickedAt > slot.endAt) {
         setNow(clickedAt);
         return;
       }
 
       // 표의 공통 범위가 아니라 방별 운영시간으로 검사한다
       const isClosed = isOutsideOperationHours(
-        format(slotDateFrom, 'HH:mm'),
+        slot.startMinute,
         partition.operationStartTime,
         partition.operationEndTime,
+        partition.endsAtMidnight,
       );
 
       if (!isClosed) {
-        toggleSlot(partition, times[timeIndex]);
+        toggleSlot(partition, slot);
       }
     },
-    [selectedDate, times, toggleSlot],
+    [slots, toggleSlot],
   );
 
   const handleSlotClick = useCallback(
@@ -444,11 +370,13 @@ const RoomPage = () => {
   );
 
   // 예약 확인 모달의 타임레일에 쓰는 값. 순수 함수 결과라 useMemo 는 필요 없다.
-  const modalDateLabel = shortDateLabel(selectedDate);
-  const modalFromLabel = selectedRangeFrom
-    ? format(selectedRangeFrom, 'HH:mm')
-    : '';
-  const modalToLabel = selectedRangeTo ? format(selectedRangeTo, 'HH:mm') : '';
+  // 날짜는 표의 날짜가 아니라 선택한 예약이 시작하는 날이다. 끝은 공용 표기라 자정이면 '24:00' 이다.
+  const modalDateLabel = shortDateLabel(selectedRangeFrom ?? selectedDate);
+  const modalFromLabel = selectedRangeFrom ? clockLabel(selectedRangeFrom) : '';
+  const modalToLabel =
+    selectedRangeFrom && selectedRangeTo
+      ? endTimeLabel(selectedRangeFrom, selectedRangeTo)
+      : '';
   const modalDurationText =
     selectedRangeFrom && selectedRangeTo
       ? durationLabel(differenceInMinutes(selectedRangeTo, selectedRangeFrom))
@@ -561,11 +489,11 @@ const RoomPage = () => {
             </div>
           </div>
         )}
-        {hasRooms && times.length > 0 && (
+        {hasRooms && slots.length > 0 && (
           <div>
             <ReservationTimeTable
               rooms={reservationsByRooms}
-              times={times}
+              slots={slots}
               selectedDate={selectedDate}
               now={now}
               selection={selection}
