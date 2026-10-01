@@ -939,7 +939,7 @@ describe('익일 꼬리 칸', () => {
     );
   });
 
-  it('23:00 뒤에 꼬리 00:30 을 누르면 23:00~익일 01:00 한 건이고 끝은 다음 날 01:00 으로 보낸다', () => {
+  it('23:00 뒤에 꼬리 00:30 을 누르면 23:00~01:00 한 건이고 끝은 다음 날 01:00 으로 보낸다', () => {
     const doReserve = jest.fn().mockResolvedValue({});
     useReserve.mockReturnValue({ mutateAsync: doReserve, isPending: false });
     const { container } = renderWith([tailRoom(), plainRoom()]);
@@ -949,7 +949,9 @@ describe('익일 꼬리 칸', () => {
     fireEvent.click(cells[49]);
 
     expect(mockOpenSnackbar).not.toHaveBeenCalled();
-    expect(screen.getByText('306-1 · 23:00~익일 01:00')).toBeInTheDocument();
+    // 하단 바는 시각만 적는다. 시작일은 표의 날짜다.
+    expect(screen.getByText('306-1 · 23:00~01:00')).toBeInTheDocument();
+    expect(screen.queryByText(/익일|전날/)).toBeNull();
 
     fireEvent.click(screen.getAllByText('예약하기')[0]);
     fireEvent.click(

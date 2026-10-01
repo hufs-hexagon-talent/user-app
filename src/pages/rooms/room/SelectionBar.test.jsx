@@ -128,8 +128,9 @@ describe('SelectionBar 자정 표기', () => {
     expect(getByText('306-1 · 23:30~24:00')).toBeInTheDocument();
   });
 
-  it('다음 날에 끝나면 익일을 붙인다', () => {
-    const { getByText } = render(
+  // 표의 날짜가 시작일이다. '익일' 을 붙이지 않고 시각만 적는다.
+  it('다음 날에 끝나면 시각만 적는다', () => {
+    const { getByText, queryByText } = render(
       <SelectionBar
         {...props({
           from: new Date('2026-10-20T23:00:00'),
@@ -137,7 +138,8 @@ describe('SelectionBar 자정 표기', () => {
         })}
       />,
     );
-    expect(getByText('306-1 · 23:00~익일 01:00')).toBeInTheDocument();
+    expect(getByText('306-1 · 23:00~01:00')).toBeInTheDocument();
+    expect(queryByText(/익일|전날/)).toBeNull();
   });
 
   it('꼬리 칸에서 시작한 선택은 시각 앞에 시작일을 적고 같은 날 표기를 쓴다', () => {

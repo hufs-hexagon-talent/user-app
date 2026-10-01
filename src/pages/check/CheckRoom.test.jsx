@@ -647,7 +647,8 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
     ).toBeInTheDocument();
   });
 
-  test('다음 날에 끝나면 날짜는 시작일이고 종료는 익일 캡션과 시각 두 줄이다', () => {
+  // 날짜 열이 시작일을 보인다. 종료 칸에 '익일' 캡션을 두지 않고 시각만 적는다.
+  test('다음 날에 끝나면 날짜는 시작일이고 종료는 시각만 적는다', () => {
     useUserReservation.mockReturnValue(
       loaded([
         reservation(1, {
@@ -659,13 +660,11 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
     renderCheck();
 
     const row = screen.getByText('세미나실-1').closest('tr');
-    const endCell = row.querySelectorAll('td')[4];
-    expect(cellTexts(row).slice(2, 4)).toEqual(['10-20', '23:00']);
-    expect(within(endCell).getByText('익일')).toBeInTheDocument();
-    expect(within(endCell).getByText('01:00')).toBeInTheDocument();
+    expect(cellTexts(row).slice(2, 5)).toEqual(['10-20', '23:00', '01:00']);
+    expect(row.textContent).not.toMatch(/익일|전날/);
     expect(
       screen.getByRole('button', {
-        name: '2099-10-20 23:00~익일 01:00 세미나실-1 예약 취소',
+        name: '2099-10-20 23:00~01:00 세미나실-1 예약 취소',
       }),
     ).toBeInTheDocument();
   });
@@ -688,5 +687,26 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
       '23:30',
       '24:00',
     ]);
+  });
+
+  test('미출석 표도 다음 날에 끝나면 종료를 시각만 적는다', () => {
+    const missed = reservation(3, {
+      reservationStartTime: '2020-10-20T23:00:00+09:00',
+      reservationEndTime: '2020-10-21T01:00:00+09:00',
+    });
+    useNoShow.mockReturnValue(loaded(noShowOf(1, [missed])));
+    renderCheck();
+    openNoShowPopover();
+
+    const row = within(screen.getByRole('presentation'))
+      .getByText('세미나실-1')
+      .closest('tr');
+    expect(cellTexts(row).slice(1, 5)).toEqual([
+      '2020-10-20',
+      '세미나실-1',
+      '23:00',
+      '01:00',
+    ]);
+    expect(row.textContent).not.toMatch(/익일|전날/);
   });
 });
