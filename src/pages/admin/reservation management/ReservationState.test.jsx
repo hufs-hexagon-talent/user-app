@@ -121,8 +121,22 @@ describe('ReservationState 하루 경계', () => {
   });
 });
 
-describe('ReservationState 종료 표기', () => {
-  it('같은 날은 HH:mm, 자정은 24:00, 다음 날은 익일 HH:mm 으로 적는다', async () => {
+describe('ReservationState 시각 표기', () => {
+  // 오늘 날짜에 기대지 않도록 달력에서 날을 고른 뒤 본다
+  const renderOn = async day => {
+    render(<ReservationState />);
+    await waitFor(() => expect(search).toHaveBeenCalled());
+    act(() => dayPicker().onChange(day));
+  };
+  // 행마다 [시작 시간, 종료 시간]. 표는 시작 시각 오름차순이다.
+  const timeRows = () =>
+    Array.from(document.querySelectorAll('tbody tr')).map(tr =>
+      Array.from(tr.querySelectorAll('td'))
+        .slice(4, 6)
+        .map(cell => cell.textContent),
+    );
+
+  it('같은 날은 HH:mm, 자정은 24:00, 다음 날에 끝나면 익일 없이 HH:mm 으로 적는다', async () => {
     search.mockResolvedValue(
       page([
         reservation(
@@ -142,10 +156,46 @@ describe('ReservationState 종료 표기', () => {
         ),
       ]),
     );
-    render(<ReservationState />);
+    await renderOn(new Date(2026, 9, 20));
 
-    expect(await screen.findByText('11:00')).toBeInTheDocument();
-    expect(screen.getByText('24:00')).toBeInTheDocument();
-    expect(screen.getByText('익일 01:00')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(timeRows()).toEqual([
+        ['10:00', '11:00'],
+        ['23:00', '01:00'],
+        ['23:30', '24:00'],
+      ]),
+    );
+    expect(document.querySelector('tbody').textContent).not.toMatch(
+      /익일|전날/,
+    );
+  });
+
+  // 서버는 고른 날에 걸친 예약을 준다(겹침). 날짜 열이 없어 전날 시작한 예약만 시작일을 붙인다.
+  it('전날 시작해 자정을 넘긴 예약은 시작 시각 앞에 시작일을 붙인다', async () => {
+    search.mockResolvedValue(
+      page([
+        reservation(
+          1,
+          '2026-10-19T23:30:00+09:00',
+          '2026-10-20T01:30:00+09:00',
+        ),
+        reservation(
+          2,
+          '2026-10-20T09:00:00+09:00',
+          '2026-10-20T10:00:00+09:00',
+        ),
+      ]),
+    );
+    await renderOn(new Date(2026, 9, 20));
+
+    await waitFor(() =>
+      expect(timeRows()).toEqual([
+        ['10-19 23:30', '01:30'],
+        ['09:00', '10:00'],
+      ]),
+    );
+    expect(document.querySelector('tbody').textContent).not.toMatch(
+      /익일|전날/,
+    );
   });
 });

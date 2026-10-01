@@ -20,7 +20,7 @@ import {
 import { useMyInfo, useBlockedPeriod } from '../../api/user.api';
 import BooEmptyState from '../../components/BooEmptyState';
 import { useCustomSnackbars } from '../../components/snackbar/SnackBar';
-import { endTimeParts, NEXT_DAY_LABEL } from '../../utils/reservationTimeLabel';
+import { endTimeLabel } from '../../utils/reservationTimeLabel';
 import {
   formatReservationTime,
   formatRoom,
@@ -29,19 +29,6 @@ import {
   sortReservationsLatestFirst,
 } from '../inquiry/reservationView';
 import { cancelReservationErrorMessage } from './cancelReservationMessage';
-
-// 종료 시각. 다음 날에 끝나면 작은 '익일' 캡션 아래에 시각을 두 줄로 적어 열 폭을 그대로 둔다.
-// 자정에 끝나면 '24:00' 한 줄이다.
-const EndTime = ({ start, end }) => {
-  const { nextDay, time } = endTimeParts(start, end);
-  if (!nextDay) return time;
-  return (
-    <span className="inline-flex flex-col items-center leading-tight">
-      <span className="text-[11px] text-gray-500">{NEXT_DAY_LABEL}</span>
-      <span>{time}</span>
-    </span>
-  );
-};
 
 const Check = () => {
   const {
@@ -290,8 +277,9 @@ const Check = () => {
                       <Table.Cell className="px-2 py-4">
                         {format(start, 'HH:mm')}
                       </Table.Cell>
+                      {/* 날짜 열이 시작일을 보이므로 종료는 시각만 적는다. 자정에 끝나면 '24:00' 이다. */}
                       <Table.Cell className="px-2 py-4">
-                        <EndTime start={start} end={end} />
+                        {endTimeLabel(start, end)}
                       </Table.Cell>
                       <Table.Cell className="px-2 py-1">
                         {/* 44px 클릭 영역은 유지하고 여백을 줄여 기존 출석 행 높이에 맞춘다. */}
@@ -440,10 +428,10 @@ const Check = () => {
                             {format(reservation.reservationStartTime, 'HH:mm')}
                           </Table.Cell>
                           <Table.Cell>
-                            <EndTime
-                              start={reservation.reservationStartTime}
-                              end={reservation.reservationEndTime}
-                            />
+                            {endTimeLabel(
+                              reservation.reservationStartTime,
+                              reservation.reservationEndTime,
+                            )}
                           </Table.Cell>
                           <Table.Cell>
                             {isDisputable(reservation)

@@ -24,7 +24,7 @@ export const reservationStateLabel = (reservation, now = new Date()) => {
 
 // 서버가 만드는 스냅샷(reservationSummary)과 같은 포맷. 수정 모드에서 두 값이 한 자리에
 // 번갈아 보이고, 연도가 다른 예약이 같은 줄로 보이지 않게 연도를 붙인다.
-// 날짜는 시작일이고 끝은 공용 표기다('2026-10-20 23:30~24:00', '2026-10-20 23:00~익일 01:00').
+// 날짜는 시작일이고 끝은 공용 표기다('2026-10-20 23:30~24:00', '2026-10-20 23:00~01:00').
 export const formatReservationTime = reservation => {
   const start = new Date(reservation.reservationStartTime);
   const end = new Date(reservation.reservationEndTime);
@@ -48,11 +48,17 @@ export const sortReservationsLatestFirst = list => {
 // 스냅샷 문자열만 남는다(FK ON DELETE SET NULL). 목록 카드와 폼 스냅샷 카드가 같이 쓴다.
 export const CANCELED_RESERVATION_SUFFIX = ' · 취소된 예약';
 
+// 예전 서버는 자정을 넘는 끝을 '익일 HH:mm' 으로 적었다('2026-09-30 23:30~익일 01:30 306-2').
+// 저장된 스냅샷은 그대로 남아 있으므로 보일 때 지금 표기('23:30~01:30')로 맞춘다.
+export const normalizeReservationSummary = summary =>
+  summary.replace('~익일 ', '~');
+
 export const linkedReservationLabel = inquiry => {
   if (!inquiry?.reservationSummary) return null;
+  const summary = normalizeReservationSummary(inquiry.reservationSummary);
   return inquiry.reservationId == null
-    ? `${inquiry.reservationSummary}${CANCELED_RESERVATION_SUFFIX}`
-    : inquiry.reservationSummary;
+    ? `${summary}${CANCELED_RESERVATION_SUFFIX}`
+    : summary;
 };
 
 // 출석 이의 대상. 서버의 노쇼 판정(종료 시각 경과)과 같은 경계이고, 제한이 풀리며 PROCESSED 로

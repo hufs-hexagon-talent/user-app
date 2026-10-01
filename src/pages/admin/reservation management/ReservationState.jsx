@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
-import { format, addDays } from 'date-fns';
+import { format, addDays, isSameDay } from 'date-fns';
 import { Pagination } from '@mui/material';
 import { useCustomSnackbars } from '../../../components/snackbar/SnackBar';
 import { useAllRooms } from '../../../api/room.api';
@@ -23,6 +23,15 @@ import { endTimeLabel } from '../../../utils/reservationTimeLabel';
 // 새벽 예약이 전날 목록에 떴다.
 const kstDayStart = date =>
   new Date(`${format(date, 'yyyy-MM-dd')}T00:00:00+09:00`).toISOString();
+
+// 시작 시각 칸. 이 표는 날짜 열 없이 고른 날 하루를 보이고, 서버는 그날에 걸친 예약(겹침)을 준다.
+// 전날 시작해 자정을 넘긴 예약은 시작일을 앞에 붙인다('09-30 23:30'). 없으면 종료 01:30 과 나란히
+// 23:30 이 그날 밤으로 읽힌다. 고른 날에 시작한 예약은 시각만 적는다.
+const startTimeLabel = (start, day) =>
+  format(
+    new Date(start),
+    isSameDay(new Date(start), day) ? 'HH:mm' : 'MM-dd HH:mm',
+  );
 
 const ReservationState = () => {
   const navigate = useNavigate();
@@ -258,9 +267,9 @@ const ReservationState = () => {
                     {reservation.name}
                   </Table.Cell>
                   <Table.Cell>
-                    {format(
-                      new Date(reservation.reservationStartTime),
-                      'HH:mm',
+                    {startTimeLabel(
+                      reservation.reservationStartTime,
+                      selectedDate,
                     )}
                   </Table.Cell>
                   <Table.Cell>

@@ -23,10 +23,14 @@ describe('endTimeLabel', () => {
     ).toBe('24:00');
   });
 
-  it('다음 날 00:00 보다 뒤에 끝나면 익일 HH:mm 이다', () => {
-    expect(
-      endTimeLabel(at('2026-10-20T23:00:00'), at('2026-10-21T01:00:00')),
-    ).toBe('익일 01:00');
+  // 시작일은 화면이 시각 옆에 따로 보인다. '익일' 같은 말을 붙이지 않는다.
+  it('다음 날 00:00 보다 뒤에 끝나면 그 시각 HH:mm 만 적는다', () => {
+    const label = endTimeLabel(
+      at('2026-10-20T23:00:00'),
+      at('2026-10-21T01:00:00'),
+    );
+    expect(label).toBe('01:00');
+    expect(label).not.toMatch(/익일|전날/);
   });
 
   it('서버 문자열(UTC)도 그대로 받는다', () => {
@@ -37,13 +41,13 @@ describe('endTimeLabel', () => {
 });
 
 describe('endTimeParts', () => {
-  it('익일이면 접두와 시각을 나눠 준다', () => {
+  it('자정을 넘으면 nextDay 와 그 시각을 준다', () => {
     expect(
       endTimeParts(at('2026-10-20T23:00:00'), at('2026-10-21T01:00:00')),
     ).toEqual({ nextDay: true, time: '01:00' });
   });
 
-  it('24:00 과 같은 날은 접두가 없다', () => {
+  it('24:00 과 같은 날은 자정을 넘지 않는다', () => {
     expect(
       endTimeParts(at('2026-10-20T23:30:00'), at('2026-10-21T00:00:00')),
     ).toEqual({ nextDay: false, time: '24:00' });
@@ -64,7 +68,10 @@ describe('timeRangeLabel / clockLabel', () => {
     ).toBe('23:30~24:00');
     expect(
       timeRangeLabel(at('2026-10-20T23:00:00'), at('2026-10-21T01:00:00')),
-    ).toBe('23:00~익일 01:00');
+    ).toBe('23:00~01:00');
+    expect(
+      timeRangeLabel(at('2026-09-30T23:30:00'), at('2026-10-01T01:30:00')),
+    ).toBe('23:30~01:30');
   });
 });
 
