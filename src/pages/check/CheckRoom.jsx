@@ -20,6 +20,7 @@ import {
 import { useMyInfo, useBlockedPeriod } from '../../api/user.api';
 import BooEmptyState from '../../components/BooEmptyState';
 import { useCustomSnackbars } from '../../components/snackbar/SnackBar';
+import { endTimeLabel } from '../../utils/reservationTimeLabel';
 import {
   formatReservationTime,
   formatRoom,
@@ -276,8 +277,9 @@ const Check = () => {
                       <Table.Cell className="px-2 py-4">
                         {format(start, 'HH:mm')}
                       </Table.Cell>
+                      {/* 날짜 열이 시작일을 보이므로 종료는 시각만 적는다. 자정에 끝나면 '24:00' 이다. */}
                       <Table.Cell className="px-2 py-4">
-                        {format(end, 'HH:mm')}
+                        {endTimeLabel(start, end)}
                       </Table.Cell>
                       <Table.Cell className="px-2 py-1">
                         {/* 44px 클릭 영역은 유지하고 여백을 줄여 기존 출석 행 높이에 맞춘다. */}
@@ -426,7 +428,10 @@ const Check = () => {
                             {format(reservation.reservationStartTime, 'HH:mm')}
                           </Table.Cell>
                           <Table.Cell>
-                            {format(reservation.reservationEndTime, 'HH:mm')}
+                            {endTimeLabel(
+                              reservation.reservationStartTime,
+                              reservation.reservationEndTime,
+                            )}
                           </Table.Cell>
                           <Table.Cell>
                             {isDisputable(reservation)

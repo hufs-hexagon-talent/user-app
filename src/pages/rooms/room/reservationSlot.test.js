@@ -174,3 +174,84 @@ describe('createTimeTable', () => {
     expect(times).toHaveLength(27);
   });
 });
+
+describe('createTimeTable 자정', () => {
+  it('종료가 24:00 이면 48칸이고 마지막 칸은 23:30~24:00 이다', () => {
+    const times = createTimeTable({
+      startTime: { hour: 0, minute: 0 },
+      endTime: { hour: 24, minute: 0 },
+      intervalMinute: 30,
+    });
+
+    // 경계 49개 = 칸 48개
+    expect(times).toHaveLength(49);
+    expect(times[times.length - 1]).toBe('24:00');
+    expect(times[times.length - 2]).toBe('23:30');
+  });
+
+  it('00:00~23:59 는 지금처럼 47칸이다', () => {
+    const times = createTimeTable({
+      startTime: { hour: 0, minute: 0 },
+      endTime: { hour: 23, minute: 59 },
+      intervalMinute: 30,
+    });
+
+    expect(times).toHaveLength(48);
+    expect(times[times.length - 1]).toBe('23:30');
+  });
+});
+
+describe('isOutsideOperationHours 자정 정책', () => {
+  it('endsAtMidnight 면 저장 종료 23:30 이어도 23:30 칸을 연다', () => {
+    expect(isOutsideOperationHours('23:30', '00:00:00', '23:30:00', true)).toBe(
+      false,
+    );
+  });
+
+  it('플래그가 없으면 23:30 칸은 잠근다', () => {
+    expect(isOutsideOperationHours('23:30', '00:00:00', '23:30:00')).toBe(true);
+    expect(isOutsideOperationHours('23:30', '09:00:00', '23:59:59')).toBe(true);
+  });
+
+  it('칸 시작을 분으로 받아도 같다', () => {
+    expect(isOutsideOperationHours(1410, '00:00:00', '23:30:00', true)).toBe(
+      false,
+    );
+    expect(isOutsideOperationHours(510, '09:00:00', '22:00:00')).toBe(true);
+  });
+});
+
+// 익일 꼬리 칸도 보통 칸과 같은 규칙으로 고른다. 꼬리 칸 전용 안내는 없고, 자정을 넘는 범위에 남의 예약이
+// 끼면 이 판정이 true 가 되어 RoomPage 가 누른 칸부터 새로 고른다.
+describe('hasReservedSlotInRange 익일 꼬리', () => {
+  // 서버 응답처럼 예약은 문자열, 선택 범위는 Date 로 준다
+  const iso = local => `2099-10-${local}:00`;
+  const at = local => new Date(iso(local));
+
+  it('자정 앞의 남의 예약을 건너 꼬리 칸까지 잇는 범위는 true', () => {
+    const ranges = [
+      { startDateTime: iso('20T23:30'), endDateTime: iso('21T00:00') },
+    ];
+    expect(hasReservedSlotInRange(ranges, at('20T23:00'), at('21T00:30'))).toBe(
+      true,
+    );
+  });
+
+  it('꼬리 안의 남의 예약을 건너는 범위도 true', () => {
+    const ranges = [
+      { startDateTime: iso('21T00:00'), endDateTime: iso('21T00:30') },
+    ];
+    expect(hasReservedSlotInRange(ranges, at('20T23:00'), at('21T01:00'))).toBe(
+      true,
+    );
+  });
+
+  it('꼬리 칸에서 시작한 범위는 그 앞에서 끝나는 자정 넘김 예약과 겹치지 않는다', () => {
+    const ranges = [
+      { startDateTime: iso('20T23:00'), endDateTime: iso('21T00:30') },
+    ];
+    expect(hasReservedSlotInRange(ranges, at('21T00:30'), at('21T01:30'))).toBe(
+      false,
+    );
+  });
+});

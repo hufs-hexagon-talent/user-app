@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { RecoilRoot } from 'recoil';
 
@@ -15,13 +15,16 @@ jest.mock('../../api/user.api', () => ({
 }));
 
 // 활성 탭은 현재 경로로 정해지므로 경로를 지정해 렌더할 수 있어야 한다.
-const renderAt = (role, path) => {
+// 로그인 여부와 locked(기본 비밀번호 변경 전)는 관리자 화면 링크 조건을 볼 때만 바꾼다.
+const renderAt = (role, path, { loggedIn = true, locked = false } = {}) => {
   mockRole.mockReturnValue(role);
   return render(
     <RecoilRoot
-      initializeState={snap => snap.set(authState, { isAuthenticated: true })}>
+      initializeState={snap =>
+        snap.set(authState, { isAuthenticated: loggedIn })
+      }>
       <MemoryRouter initialEntries={[path]}>
-        <NavigationBar />
+        <NavigationBar locked={locked} />
       </MemoryRouter>
     </RecoilRoot>,
   );
@@ -42,6 +45,64 @@ describe('NavigationBar 출석 체크 링크', () => {
   test('관리자에게는 /qrcheck 로 가는 링크 자체가 없다', () => {
     const { container } = renderAs('ADMIN');
     expect(container.querySelector('a[href="/qrcheck"]')).toBeNull();
+  });
+});
+
+// 관리자 화면(admin-app)은 /admin/ 아래에서 따로 도는 앱이다. 학생 앱 라우터에는 그 경로가
+// 없어서 라우터로 옮기면 * 라우트가 / 로 되돌린다. 위와 같이 텍스트가 아니라 href 로 본다.
+describe('NavigationBar 관리자 화면 링크', () => {
+  const adminLink = container => container.querySelector('a[href="/admin/"]');
+
+  // 옛 관리자 화면(/manage)에서도 같은 네비가 그려진다. 거기서 새 관리자 화면으로 가는 길이다.
+  it.each(['/', '/manage/policy'])(
+    '관리자에게는 %s 에서 /admin/ 링크가 보인다',
+    path => {
+      const { container } = renderAt('ADMIN', path);
+
+      expect(adminLink(container)).toHaveTextContent('관리자 화면');
+    },
+  );
+
+  // MemoryRouter 의 Link 도 href 는 똑같이 그린다. 차이는 클릭의 기본 동작을 막느냐다.
+  // React 는 루트 컨테이너에서 이벤트를 처리하므로 window 리스너가 가장 나중에 본다.
+  // jsdom 은 실제 페이지 이동을 못 해서 확인한 뒤 여기서 막는다.
+  test('라우터 이동이 아니라 전체 페이지 이동이다', () => {
+    const { container } = renderAt('ADMIN', '/');
+    let prevented;
+    const spy = event => {
+      prevented = event.defaultPrevented;
+      event.preventDefault();
+    };
+    window.addEventListener('click', spy);
+    fireEvent.click(adminLink(container));
+    window.removeEventListener('click', spy);
+
+    expect(prevented).toBe(false);
+  });
+
+  // 위 테스트는 target=_blank 도 통과한다. 새 탭도 기본 동작을 막지 않기 때문이다.
+  // 관리자 화면에서 학생 화면으로 오는 링크가 있어 오가기 쉽고, 모바일에서 탭이 쌓이지 않도록 같은 탭이다.
+  // 관리자 화면의 '학생 화면' 링크(새 탭)와 맞춘다고 이 링크까지 새 탭으로 바꾸면 여기서 걸린다.
+  test('새 탭이 아니라 같은 탭에서 연다', () => {
+    const { container } = renderAt('ADMIN', '/');
+
+    expect(adminLink(container)).not.toHaveAttribute('target');
+  });
+
+  it.each([
+    ['일반 사용자', 'USER', {}],
+    ['이용 정지된 사용자', 'BLOCKED', {}],
+    ['관리실 계정', 'RESIDENT', {}],
+    // 역할 조회가 끝나기 전에 그리면 잠깐 보였다 사라진다.
+    ['역할을 아직 모르는 동안', undefined, {}],
+    // 기본 비밀번호를 바꾸기 전에는 비밀번호 화면 밖으로 보내지 않는다.
+    ['비밀번호를 바꾸기 전인 관리자', 'ADMIN', { locked: true }],
+    // 역할 값이 남아 있어도 로그인 여부로 막히는지 보려고 ADMIN 을 준다.
+    ['로그인하지 않은 방문자', 'ADMIN', { loggedIn: false }],
+  ])('%s 에게는 /admin/ 링크가 없다', (_label, role, options) => {
+    const { container } = renderAt(role, '/', options);
+
+    expect(adminLink(container)).toBeNull();
   });
 });
 
@@ -67,6 +128,20 @@ describe('NavigationBar 고정', () => {
     expect(title).toHaveClass('text-base');
     expect(title).toHaveClass('sm:text-xl');
     expect(title).toHaveClass('whitespace-nowrap');
+  });
+
+  // 관리자 메뉴 다섯 개는 간격 32px 이면 768~791px 에서 브랜드 옆에 못 들어가 두 줄(78px)이 되고,
+  // 한 줄 58px 를 전제로 둔 토스트 위치(index.css)가 어긋난다. 여기서도 의도만 고정한다.
+  // 실제 폭은 헤드리스 브라우저로 768·820·1024·1280px 에서 한 줄임을 확인했다.
+  test('메뉴 간격은 md 구간에서 24px, lg 이상에서 32px 이다', () => {
+    const { container } = renderAs('ADMIN');
+    const list = container.querySelector('nav ul');
+
+    expect(list).toHaveClass('md:space-x-6');
+    expect(list).toHaveClass('lg:space-x-8');
+    expect(list).not.toHaveClass('md:space-x-8');
+    // theme.list 는 통째로 바뀐다. 기본값에 있던 가로 배치가 빠지면 데스크톱 메뉴가 세로로 선다.
+    expect(list).toHaveClass('md:flex-row');
   });
 });
 

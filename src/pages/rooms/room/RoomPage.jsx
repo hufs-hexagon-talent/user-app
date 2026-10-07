@@ -9,10 +9,11 @@ import { useNavigate } from 'react-router-dom';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { Typography } from '@mui/material';
 import {
+  addDays,
   addMinutes,
   format,
-  parse,
   isBefore,
+  isSameDay,
   differenceInMinutes,
 } from 'date-fns';
 
@@ -26,25 +27,31 @@ import useUrlQuery from '../../../hooks/useUrlQuery';
 import useAuth from '../../../hooks/useAuth';
 import { fetchBlockedPeriod, isAuthError } from '../../../api/user.api';
 import {
-  createTimeTable,
   getReserveErrorMessage,
   hasReservedSlotInRange,
-  isOutsideOperationHours,
   maxMinutesExceededMessage,
   normalizeErrorCode,
   RESERVE_AUTH_FAILED_MESSAGE,
 } from './reservationSlot';
 import ReservationTimeTable from './ReservationTimeTable';
-import { SLOT_INTERVAL_MINUTE } from './slotState';
+import { buildSlots, dayStartOf, isSlotClosedForRoom } from './operationWindow';
+import { getSlotState } from './slotState';
 import TimeTableLegend from './TimeTableLegend';
+import { LEGEND_GUTTER_CLASS } from './tableGutter';
 import SelectionBar from './SelectionBar';
 import CustomButton from '../../../components/button/Button';
 import { Button } from 'flowbite-react';
 import { Modal } from 'flowbite-react';
 import { durationLabel } from './durationLabel';
-import { shortDateLabel } from './dateLabel';
+import {
+  dayOfMonthLabel,
+  monthDayLabel,
+  shortDateLabel,
+  weekdayDateLabel,
+} from './dateLabel';
 import { modalTheme } from '../../../components/modal/modalTheme';
 import BooEmptyState from '../../../components/BooEmptyState';
+import { clockLabel, endTimeParts } from '../../../utils/reservationTimeLabel';
 
 // 취소·예약 버튼(flowbite Button, node_modules/flowbite-react/dist/esm/components/Button/theme.mjs)
 // 의 색은 theme.color 를 통째로 바꾼다 — className 으로 hover 색만 덧붙이면 theme.color.light/
@@ -95,12 +102,6 @@ const RoomPage = () => {
   // 빈 배열을 그대로 includeDates 에 주면 react-datepicker 가 "허용 날짜 0개" 로 읽어
   // 35칸이 전부 잠기고 월 이동 화살표까지 사라져 학생이 아무것도 할 수 없다.
   const [availableDate, setAvailableDate] = useState(null);
-  const [earliestStartTime, setEarliestStartTime] = useState(null);
-  const [startHour, setStartHour] = useState(null);
-  const [startMinute, setStartMinute] = useState(null);
-  const [endHour, setEndHour] = useState(null);
-  const [endMinute, setEndMinute] = useState(null);
-  const [maxReservationMinute, setMaxReservationMinute] = useState(null);
   const [openReserveModal, setOpenReserveModal] = useState(false);
   // 모달이 열리며 닫기 버튼에 자동 포커스가 가면 마우스 사용자에게도 focus-visible 링이
   // 보인다(flowbite Modal 이 FloatingFocusManager 로 initialFocus 대상에 포커스를 준다).
@@ -112,9 +113,22 @@ const RoomPage = () => {
   const today = new Date();
   const departmentId = 1;
 
-  const [selectedDate, setSelectedDate] = useUrlQuery(
+  // 화면을 열어둔 채 시간이 지나면 지난 칸이 저절로 잠기도록 현재 시각을 갱신한다
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 주소에 date 가 없을 때 보여 줄 날. 자정이 지나면 오늘로 넘긴다(아래 effect).
+  // 날짜를 주소로 고정했으면 이 값은 쓰이지 않는다.
+  const todayDate = format(now, 'yyyy-MM-dd');
+  const [followDate, setFollowDate] = useState(todayDate);
+
+  const [selectedDate, setSelectedDate, isDateFixed] = useUrlQuery(
     'date',
-    format(new Date(), 'yyyy-MM-dd'),
+    followDate,
   );
 
   const { mutateAsync: doReserve, isPending: isReserving } = useReserve();
@@ -139,60 +153,25 @@ const RoomPage = () => {
     !isReservationsPending && Array.isArray(reservationsByRooms);
   const hasRooms = hasReservationData && reservationsByRooms.length > 0;
 
-  // 화면을 열어둔 채 시간이 지나면 지난 칸이 저절로 잠기도록 현재 시각을 갱신한다
-  const [now, setNow] = useState(() => new Date());
-
+  // 선택해 둔 첫 칸이 시간이 지나 잠기면 선택을 푼다. 잠긴 칸을 예약하려다 실패하는 일을 막는다.
+  // 확인 모달이 열려 있으면 미룬다. 23:58 에 연 23:30~익일 01:00 모달이 자정 뒤에 빈 시각으로 바뀌지
+  // 않게 한다(서버는 끝이 지금보다 뒤인지만 보므로 이 예약을 받는다). 모달을 닫으면 다시 본다.
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // 선택해 둔 첫 칸이 시간이 지나 잠기면 선택을 푼다. 잠긴 칸을 예약하려다 실패하는 일을 막는다
-  useEffect(() => {
-    if (!selectedRangeFrom) return;
+    if (!selectedRangeFrom || openReserveModal) return;
     if (now > addMinutes(selectedRangeFrom, 30)) {
       setSelectedRoom(null);
       setSelectedRangeFrom(null);
       selSelectedRangeTo(null);
     }
-  }, [now, selectedRangeFrom]);
+  }, [now, selectedRangeFrom, openReserveModal]);
 
+  // 자정이 지나면 주소에 date 가 없는 화면을 오늘 표로 넘긴다. 고르던 칸이 있거나 확인 모달이 열려
+  // 있으면 미룬다. 첫 칸이 지나 선택이 풀리면(위 effect) 그때 넘어간다.
   useEffect(() => {
-    if (reservationsByRooms && reservationsByRooms.length > 0) {
-      const startTimes = reservationsByRooms?.map(
-        room => room.operationStartTime,
-      );
-      // operationStartTime들에서 서로 비교해서 제일 작은 값이 earliest가 되게
-      const earliestTime = startTimes.reduce((earliest, current) => {
-        return earliest < current ? earliest : current;
-      });
-      setEarliestStartTime(earliestTime);
-
-      // ':' 분리해서 시와 분으로 나눠서 저장
-      const [startHour, startMinute] = earliestTime.split(':');
-      setStartHour(parseInt(startHour, 10));
-      setStartMinute(parseInt(startMinute, 10));
-
-      const endTimes = reservationsByRooms?.map(room => room.operationEndTime);
-
-      // operationEndTime들에서 서로 비교해서 제일 큰 값이 latest가 되게
-      const latestTime = endTimes.reduce((latest, current) => {
-        return latest > current ? latest : current;
-      });
-      // ':' 분리해서 시와 분으로 나눠서 저장
-      const [endHour, endMinute] = latestTime.split(':');
-      setEndHour(parseInt(endHour, 10));
-      setEndMinute(parseInt(endMinute, 10));
-
-      // eachMaxMinute들을 배열로 저장
-      const eachMaxMinutes = reservationsByRooms?.map(
-        partition => partition.eachMaxMinute,
-      );
-      // 배열들 중에 가장 큰 값을 maxEachMaxMinute으로 저장
-      const maxEachMaxMinute = Math.max(...eachMaxMinutes);
-      setMaxReservationMinute(maxEachMaxMinute);
-    }
-  }, [reservationsByRooms]);
+    if (followDate === todayDate) return;
+    if (openReserveModal || selectedRangeFrom) return;
+    setFollowDate(todayDate);
+  }, [todayDate, followDate, openReserveModal, selectedRangeFrom]);
 
   // 날짜 변경 시 기존 선택 초기화.
   // 예약 현황은 30초마다 다시 불러오므로 조회 결과가 아니라 날짜에만 반응해야
@@ -203,27 +182,55 @@ const RoomPage = () => {
     selSelectedRangeTo(null);
   }, [selectedDate]);
 
-  // 계산해놓은 시간들을 timeTableConfig에 객체로 선언
-  const timeTableConfig = {
-    startTime: {
-      hour: startHour,
-      minute: startMinute,
-    },
-    endTime: {
-      hour: endHour,
-      minute: endMinute,
-    },
-    intervalMinute: SLOT_INTERVAL_MINUTE,
-    maxReservationMinute: maxReservationMinute,
-  };
-
-  const times = useMemo(
-    () =>
-      startHour !== null && startMinute !== null
-        ? createTimeTable(timeTableConfig)
-        : [],
-    [startHour, startMinute, endHour, endMinute, maxReservationMinute],
+  // 표의 칸 목록은 응답에서 바로 만든다. effect 로 범위를 state 에 옮겨 두면 한 렌더 늦어서
+  // 날짜를 바꾼 첫 렌더가 이전 날의 범위로 그려진다. 칸마다 분과 절대 시각을 함께 갖는다.
+  const slots = useMemo(
+    () => buildSlots(reservationsByRooms, selectedDate),
+    [reservationsByRooms, selectedDate],
   );
+  const dayStart = useMemo(() => dayStartOf(selectedDate), [selectedDate]);
+
+  // 익일 꼬리가 있는 날에는 표 아래에 다음 날 표로 가는 링크를 둔다. 이 표는 다음 날을 overnightUntil 까지만 보여 준다.
+  const nextDayStart =
+    dayStart && slots.some(slot => slot.nextDay) ? addDays(dayStart, 1) : null;
+
+  // 주소로 고정한 날짜가 지난 날이 된 경우. 화면을 열어 둔 사이 자정이 지난 때뿐 아니라, 자정 뒤에
+  // 브라우저가 탭을 다시 불러온 때도 띄운다. 달력은 오늘부터 고르므로 지난 날짜는 옛 주소에서만 생긴다.
+  const showDateChanged = isDateFixed === true && selectedDate < todayDate;
+
+  // 오늘 표에 새로 고를 수 있는 칸이 하나도 남지 않았는지. 꼬리 칸은 눌러서 고를 수 있지만 다음 날에 시작하는
+  // 예약이라 세지 않는다. 꼬리만 비어 있으면 오늘 예약할 수 있는 시간은 끝났다.
+  const noSlotLeftToday = useMemo(() => {
+    if (selectedDate !== todayDate || !hasRooms) return false;
+    return !reservationsByRooms.some(room =>
+      slots.some(
+        slot =>
+          !slot.nextDay &&
+          getSlotState({
+            slotStart: slot.startAt,
+            slotMinute: slot.startMinute,
+            now,
+            room,
+            selection: null,
+          }).selectable,
+      ),
+    );
+  }, [selectedDate, todayDate, hasRooms, reservationsByRooms, slots, now]);
+
+  // 오늘 뒤의 첫 운영일('yyyy-MM-dd'). 예약 가능한 날짜 목록을 모르면 null 이다.
+  const nextOpenDate = useMemo(() => {
+    if (!Array.isArray(availableDate)) return null;
+    const later = availableDate
+      .map(date => format(date, 'yyyy-MM-dd'))
+      .filter(date => date > todayDate)
+      .sort();
+    return later[0] ?? null;
+  }, [availableDate, todayDate]);
+  const nextOpenLabel =
+    nextOpenDate &&
+    (nextOpenDate === format(addDays(now, 1), 'yyyy-MM-dd')
+      ? '내일 표 보기'
+      : `${weekdayDateLabel(dayStartOf(nextOpenDate))} 표 보기`);
 
   // date-picker에서 날짜 선택할 때마다 실행되는 함수
   const handleDateChange = date => {
@@ -235,17 +242,13 @@ const RoomPage = () => {
   };
 
   // 슬롯의 상태 토글하는 함수
+  // 익일 꼬리 칸도 보통 칸과 같은 규칙으로 고른다. 꼬리 칸을 먼저 누르거나 남의 예약을 건너 누르면 거기서
+  // 새 선택이 시작되고, 그 예약은 다음 날(D+1)에 시작한다. 꼬리 칸은 그 호실의 overnightUntil 까지만
+  // 열려 있어서(operationWindow) 이 표에서 고르는 끝도 거기까지다.
   const toggleSlot = useCallback(
-    (partition, time) => {
-      const targetStartAt = parse(
-        `${selectedDate} ${time}`,
-        'yyyy-MM-dd HH:mm',
-        new Date(),
-      );
-      const targetEndAt = addMinutes(
-        targetStartAt,
-        timeTableConfig.intervalMinute,
-      );
+    (partition, slot) => {
+      const targetStartAt = slot.startAt;
+      const targetEndAt = slot.endAt;
 
       const isFirstSelect = !selectedRangeFrom && !selectedRangeTo;
       // 예약 현황은 30초마다 다시 불러온다. 남이 예약하면 그 방 객체만 새 참조로 바뀌므로
@@ -255,6 +258,10 @@ const RoomPage = () => {
       const isDifferentRoom = !isSameRoom;
 
       const isSelectPast = isBefore(targetStartAt, selectedRangeFrom);
+      // 최대 길이는 이 표 응답에 실린 그 호실의 eachMaxMinute 로 잰다. 꼬리 칸에서 시작한 선택은 서버가
+      // 다음 날 예약으로 보고 다음 날 정책의 최대 시간으로 판정한다. 꼬리가 붙는 날은 시험 기간 일정 안이라
+      // 두 날의 정책이 같아 어긋나지 않는다. 어긋나면 서버가 RESERVATION-006 으로 거절하고
+      // handleReservation 의 오류 안내가 뜬다.
       const isOverDue =
         differenceInMinutes(targetEndAt, selectedRangeFrom) >
         selectedRoom?.eachMaxMinute;
@@ -304,7 +311,6 @@ const RoomPage = () => {
       selSelectedRangeTo(targetEndAt);
     },
     [
-      selectedDate,
       setSelectedRangeFrom,
       selSelectedRangeTo,
       selectedRoom,
@@ -395,31 +401,28 @@ const RoomPage = () => {
   // 최대 예약 시간에 부합하는지 계산하는 함수
   const handleCellClick = useCallback(
     (partition, timeIndex) => {
-      const slotDateFrom = parse(
-        `${selectedDate} ${times[timeIndex]}`,
-        'yyyy-MM-dd HH:mm',
-        new Date(),
-      );
+      const slot = slots[timeIndex];
+      if (!slot) return;
 
       // 갱신 주기 사이에 지나가 버린 칸이 눌리지 않게 클릭 시점으로 한 번 더 확인한다
       const clickedAt = new Date();
-      if (clickedAt > addMinutes(slotDateFrom, SLOT_INTERVAL_MINUTE)) {
+      if (clickedAt > slot.endAt) {
         setNow(clickedAt);
         return;
       }
 
-      // 표의 공통 범위가 아니라 방별 운영시간으로 검사한다
-      const isClosed = isOutsideOperationHours(
-        format(slotDateFrom, 'HH:mm'),
-        partition.operationStartTime,
-        partition.operationEndTime,
+      // 표의 공통 범위가 아니라 방별 운영시간(익일 꼬리 포함)으로 검사한다
+      const isClosed = isSlotClosedForRoom(
+        partition,
+        slot.startMinute,
+        dayStart,
       );
 
       if (!isClosed) {
-        toggleSlot(partition, times[timeIndex]);
+        toggleSlot(partition, slot);
       }
     },
-    [selectedDate, times, toggleSlot],
+    [slots, toggleSlot, dayStart],
   );
 
   const handleSlotClick = useCallback(
@@ -443,12 +446,32 @@ const RoomPage = () => {
     [selectedRoom, selectedRangeFrom, selectedRangeTo],
   );
 
+  // 꼬리 칸에서 시작한 선택은 표의 날짜가 아니라 다음 날에 시작한다. 하단 바는 평소 날짜를 적지 않으므로
+  // 이때만 시각 앞에 시작일을 붙인다. 없으면 '00:00~01:30' 이 이 표의 새벽으로 읽힌다.
+  const selectionDateLabel =
+    selectedRangeFrom && dayStart && !isSameDay(selectedRangeFrom, dayStart)
+      ? monthDayLabel(selectedRangeFrom)
+      : null;
+
   // 예약 확인 모달의 타임레일에 쓰는 값. 순수 함수 결과라 useMemo 는 필요 없다.
-  const modalDateLabel = shortDateLabel(selectedDate);
-  const modalFromLabel = selectedRangeFrom
-    ? format(selectedRangeFrom, 'HH:mm')
-    : '';
-  const modalToLabel = selectedRangeTo ? format(selectedRangeTo, 'HH:mm') : '';
+  // 날짜는 표의 날짜가 아니라 선택한 예약이 시작하는 날이다. 끝은 공용 표기라 자정이면 '24:00' 이다.
+  // 자정을 넘으면 윗줄에 끝나는 날을 화살표로 잇고, 종료 시각은 그날의 시각으로 적고 캡션에 날을 붙인다.
+  // 24:00 에 끝나면 날짜 흐름·캡션·안내를 붙이지 않는다. 꼬리 칸에서 시작한 선택은 시작과 끝이 모두
+  // 다음 날 안이라 그날 날짜를 적고 끝도 같은 날 시각('01:30')으로 적는다. 날짜 흐름·캡션·안내는 없다.
+  const modalEnd =
+    selectedRangeFrom && selectedRangeTo
+      ? endTimeParts(selectedRangeFrom, selectedRangeTo)
+      : null;
+  const modalCrossesMidnight = modalEnd?.nextDay === true;
+  const modalDateLabel = shortDateLabel(selectedRangeFrom ?? selectedDate);
+  const modalEndDateLabel = modalCrossesMidnight
+    ? shortDateLabel(selectedRangeTo)
+    : null;
+  const modalFromLabel = selectedRangeFrom ? clockLabel(selectedRangeFrom) : '';
+  const modalToLabel = modalEnd ? modalEnd.time : '';
+  const modalEndCaption = modalCrossesMidnight
+    ? `종료 · ${dayOfMonthLabel(selectedRangeTo)}`
+    : '종료';
   const modalDurationText =
     selectedRangeFrom && selectedRangeTo
       ? durationLabel(differenceInMinutes(selectedRangeTo, selectedRangeFrom))
@@ -457,9 +480,9 @@ const RoomPage = () => {
   // 블록 전체를 한 문장으로 읽도록 aria-label 을 만든다.
   const modalTimeAriaLabel =
     modalFromLabel && modalToLabel
-      ? `${modalDateLabel} ${modalFromLabel}부터 ${modalToLabel}까지${
-          modalDurationText ? `, ${modalDurationText}` : ''
-        }`
+      ? `${modalDateLabel} ${modalFromLabel}부터 ${
+          modalEndDateLabel ? `${modalEndDateLabel} ` : ''
+        }${modalToLabel}까지${modalDurationText ? `, ${modalDurationText}` : ''}`
       : '';
 
   // date-picker 설정
@@ -541,6 +564,36 @@ const RoomPage = () => {
             </button>
           </div>
         )}
+        {showDateChanged && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mx-8 md:mx-12 lg:mx-96 mb-2 flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
+            <span>날짜가 바뀌었어요.</span>
+            <button
+              type="button"
+              // 주소의 날짜를 지우면 오늘을 따라가는 화면으로 돌아간다
+              onClick={() => setSelectedDate('')}
+              className="inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline">
+              오늘 표 보기
+            </button>
+          </div>
+        )}
+        {noSlotLeftToday && nextOpenDate && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mx-8 md:mx-12 lg:mx-96 mb-2 flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700">
+            <span>오늘 예약할 수 있는 시간이 끝났어요.</span>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(nextOpenDate)}
+              className="inline-flex min-h-[44px] items-center whitespace-nowrap px-2 font-bold text-[#002D56] hover:underline">
+              {nextOpenLabel}
+              <span aria-hidden="true">&nbsp;›</span>
+            </button>
+          </div>
+        )}
         {hasRooms && <TimeTableLegend />}
         {/* timeTable 시작 */}
         {isReservationsPending && (
@@ -561,16 +614,29 @@ const RoomPage = () => {
             </div>
           </div>
         )}
-        {hasRooms && times.length > 0 && (
+        {hasRooms && slots.length > 0 && (
           <div>
             <ReservationTimeTable
               rooms={reservationsByRooms}
-              times={times}
+              slots={slots}
               selectedDate={selectedDate}
               now={now}
               selection={selection}
               onCellClick={handleSlotClick}
             />
+            {nextDayStart && (
+              <div className={`flex justify-end ${LEGEND_GUTTER_CLASS}`}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedDate(format(nextDayStart, 'yyyy-MM-dd'))
+                  }
+                  className="inline-flex min-h-[44px] items-center text-sm font-bold text-[#002D56] hover:underline">
+                  {`${weekdayDateLabel(nextDayStart)} 표 보기`}
+                  <span aria-hidden="true">&nbsp;›</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
         {hasReservationData && !hasRooms && !isReservationsError && (
@@ -600,6 +666,7 @@ const RoomPage = () => {
                 ? `${selectedRoom.roomName}-${selectedRoom.partitionNumber}`
                 : null
             }
+            dateLabel={selectionDateLabel}
             from={selectedRangeFrom}
             to={selectedRangeTo}
             disabled={isReserving}
@@ -625,6 +692,13 @@ const RoomPage = () => {
             <div className="flex min-w-0 items-center justify-between gap-[10px]">
               <span className="whitespace-nowrap text-[13.5px] font-semibold leading-[1.2] tracking-[-0.012em] text-[#566072]">
                 {modalDateLabel}
+                {modalEndDateLabel && (
+                  <>
+                    <span aria-hidden="true"> → </span>
+                    <span className="sr-only">부터 </span>
+                    <span>{modalEndDateLabel}</span>
+                  </>
+                )}
               </span>
               <span className="flex-none whitespace-nowrap rounded-full border border-[rgba(0,45,86,0.14)] bg-white px-[11px] py-[6px] text-[14px] font-bold leading-none tracking-[-0.012em] text-[#002D56] shadow-[0_1px_1px_rgba(0,45,86,0.05)]">
                 {selectedRoom?.roomName}-{selectedRoom?.partitionNumber}
@@ -666,14 +740,20 @@ const RoomPage = () => {
               <div
                 aria-hidden="true"
                 className="flex min-w-0 flex-none flex-col items-end gap-[3px] text-right">
-                <span className="h-[14px] text-[11px] font-bold leading-[14px] tracking-[0.09em] text-[#566072]">
-                  종료
+                <span className="h-[14px] whitespace-nowrap text-[11px] font-bold leading-[14px] tracking-[0.09em] text-[#566072]">
+                  {modalEndCaption}
                 </span>
                 <span className="h-7 text-[25px] font-extrabold leading-7 tracking-[-0.03em] tabular-nums text-[#002D56] max-[359px]:text-[22px]">
                   {modalToLabel}
                 </span>
               </div>
             </div>
+            {modalCrossesMidnight && (
+              <p className="break-keep text-[12.5px] font-medium leading-[1.45] tracking-[-0.01em] text-[#566072]">
+                자정을 넘는 예약이에요. 출석은 시작 15분 전부터 한 번만 하면
+                돼요.
+              </p>
+            )}
           </div>
         </Modal.Body>
         <Modal.Footer>

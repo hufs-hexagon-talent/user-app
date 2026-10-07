@@ -248,3 +248,88 @@ describe('answerTitle', () => {
     ).toBe('이전 답변');
   });
 });
+
+describe('rowMeta 자정 표기 스냅샷', () => {
+  it('24:00 에 끝나는 스냅샷을 날짜·시간·호실로 나눈다', () => {
+    expect(
+      rowMeta({
+        category: 'ATTENDANCE',
+        reservationId: 5,
+        reservationSummary: '2026-10-20 23:30~24:00 306-1',
+      }),
+    ).toEqual({
+      label: '예약',
+      date: '2026-10-20',
+      time: '23:30~24:00',
+      room: '306-1',
+      notice: null,
+    });
+  });
+
+  // 지금 서버는 자정을 넘어도 '익일' 없이 적는다
+  it('자정을 넘는 스냅샷을 날짜·시간·호실로 나눈다', () => {
+    expect(
+      rowMeta({
+        category: 'ATTENDANCE',
+        reservationId: 5,
+        reservationSummary: '2026-09-30 23:30~01:30 306-2',
+      }),
+    ).toEqual({
+      label: '예약',
+      date: '2026-09-30',
+      time: '23:30~01:30',
+      room: '306-2',
+      notice: null,
+    });
+  });
+
+  // 예전 서버가 남긴 스냅샷은 '익일 HH:mm' 이다. 읽되 지금 표기로 맞춰 보인다.
+  it('옛 익일 스냅샷도 나누고 시간은 익일 없이 준다', () => {
+    expect(
+      rowMeta({
+        category: 'ATTENDANCE',
+        reservationId: 5,
+        reservationSummary: '2026-10-20 23:00~익일 01:00 306-1',
+      }),
+    ).toEqual({
+      label: '예약',
+      date: '2026-10-20',
+      time: '23:00~01:00',
+      room: '306-1',
+      notice: null,
+    });
+    expect(
+      rowMeta({
+        category: 'ATTENDANCE',
+        reservationId: null,
+        reservationSummary: '2026-10-20 23:00~익일 01:00 306-1',
+      }),
+    ).toEqual({
+      label: '예약',
+      date: '2026-10-20',
+      time: '23:00~01:00',
+      room: '306-1',
+      notice: '취소된 예약',
+    });
+  });
+
+  it('상세의 메타 줄도 옛 익일 스냅샷을 지금 표기로 보인다', () => {
+    expect(
+      metaLabel({
+        category: 'ATTENDANCE',
+        reservationId: 5,
+        reservationSummary: '2026-10-20 23:00~익일 01:00 306-1',
+      }),
+    ).toBe('예약 2026-10-20 23:00~01:00 306-1');
+  });
+
+  it('이 모양이 아닌 스냅샷은 지금처럼 원문으로 보여 준다', () => {
+    expect(
+      rowMeta({
+        category: 'ATTENDANCE',
+        reservationId: 5,
+        reservationSummary: '2026-10-20 23:00~다음날 01:00 306-1',
+      }),
+    ).toEqual({ fallback: '예약 2026-10-20 23:00~다음날 01:00 306-1' });
+  });
+});

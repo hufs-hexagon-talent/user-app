@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Table, Checkbox } from 'flowbite-react';
 import UnderArrow from '../../assets/icons/under_arrow_black.png';
 import { useAllPolicies } from '../../api/roomOperationPolicy.api';
+import { operationEndTimeLabel } from '../../utils/reservationTimeLabel';
 
 const CheckPolicy = ({ selectedPolicyId, setSelectedPolicyId }) => {
   const { data: policies, refetch } = useAllPolicies();
@@ -59,7 +60,7 @@ const CheckPolicy = ({ selectedPolicyId, setSelectedPolicyId }) => {
                     {policy.roomOperationPolicyId}
                   </Table.Cell>
                   <Table.Cell>{policy.operationStartTime}</Table.Cell>
-                  <Table.Cell>{policy.operationEndTime}</Table.Cell>
+                  <Table.Cell>{operationEndTimeLabel(policy)}</Table.Cell>
                   <Table.Cell>{policy.eachMaxMinute}</Table.Cell>
                 </Table.Row>
               ))}

@@ -9,6 +9,7 @@ import {
 import UsageSummaryCard from './UsageSummaryCard';
 import { summarizeUsage } from './usageSummary';
 import { format } from 'date-fns';
+import { endTimeLabel } from '../../utils/reservationTimeLabel';
 import './MyPage.css';
 import useIsMobile from '../../hooks/useIsMobile';
 import ClockGreen from '../../assets/clock_icon/clock Green.png';
@@ -54,7 +55,7 @@ const MyPage = () => {
                     <div
                       style={{ fontSize: 15 }}
                       className="whitespace-normal break-keep ml-2">
-                      {`${format(latest[0].reservationStartTime, 'MM월 dd일 HH:mm')} ~ ${format(latest[0].reservationEndTime, 'HH:mm')}`}
+                      {`${format(latest[0].reservationStartTime, 'MM월 dd일 HH:mm')} ~ ${endTimeLabel(latest[0].reservationStartTime, latest[0].reservationEndTime)}`}
                     </div>
                     <div
                       style={{ fontSize: 15 }}
@@ -76,7 +77,7 @@ const MyPage = () => {
                   <div
                     style={{ fontSize: 15 }}
                     className="whitespace-normal break-keep ml-2">
-                    {`${latest[0].roomName}-${latest[0].partitionNumber}호 / ${format(latest[0].reservationStartTime, 'MM월 dd일 HH:mm')} ~ ${format(latest[0].reservationEndTime, 'HH:mm')}`}
+                    {`${latest[0].roomName}-${latest[0].partitionNumber}호 / ${format(latest[0].reservationStartTime, 'MM월 dd일 HH:mm')} ~ ${endTimeLabel(latest[0].reservationStartTime, latest[0].reservationEndTime)}`}
                   </div>
                 </div>
               )}

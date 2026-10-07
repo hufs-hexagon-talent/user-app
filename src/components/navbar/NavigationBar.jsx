@@ -31,8 +31,16 @@ const MYPAGE_SECTION = [
   '/emailSend',
 ];
 
+// flowbite 기본 목록 클래스에서 md 구간(768~1023px)의 메뉴 간격만 32px 에서 24px 로 줄였다.
+// 관리자는 메뉴가 다섯 개라 32px 이면 791px 까지 브랜드 옆에 들어가지 못하고 두 줄(78px)이 된다.
+// 토스트 위치(index.css)가 데스크톱 네비를 한 줄 58px 로 보고 있다. theme.list 는 병합이 아니라
+// 통째로 바뀌므로 나머지 클래스도 기본값 그대로 적는다.
+const MENU_THEME = {
+  list: 'mt-4 flex flex-col md:mt-0 md:flex-row md:space-x-6 md:text-sm md:font-medium lg:space-x-8',
+};
+
 // 메뉴 이동은 라우터로 한다. href(전체 페이지 로드)는 화면 상태를 초기화하고
-// 로그아웃 요청을 페이지 이탈로 중단시키는 원인이었다.
+// 로그아웃 요청을 페이지 이탈로 중단시키는 원인이었다. 예외는 관리자 화면 링크 하나다(아래 주석).
 // locked: 기본 비밀번호를 바꾸기 전이라 다른 화면으로 갈 수 없는 상태.
 // 눌러도 되돌아오기만 하는 링크는 비로그인과 같은 방식으로 비활성 표시한다.
 const NavigationBar = ({ locked = false }) => {
@@ -92,7 +100,7 @@ const NavigationBar = ({ locked = false }) => {
         </span>
       </Navbar.Brand>
       <Navbar.Toggle />
-      <Navbar.Collapse>
+      <Navbar.Collapse theme={MENU_THEME}>
         {/* 출석 체크용 아이디라면 */}
         {loggedIn && serviceRole === 'RESIDENT' ? (
           <>
@@ -134,6 +142,17 @@ const NavigationBar = ({ locked = false }) => {
               <Navbar.Link as="span" className="text-gray-400">
                 마이페이지
               </Navbar.Link>
+            )}
+            {/* 관리자 화면(admin-app)은 같은 호스트의 /admin 아래에서 따로 도는 앱이라 이 라우터로는
+                갈 수 없다. 그래서 여기만 href 로 전체 페이지를 옮긴다. '/admin' 은 admin-app nginx 가
+                '/admin/' 으로 301 을 보내므로 끝 슬래시를 붙여 둔다. 이 네비는 옛 관리자 화면(/manage)
+                에서도 그려지므로 거기서 새 관리자 화면으로 돌아가는 길도 이 링크가 맡는다.
+                새 탭이 아니라 같은 탭에서 연다. 관리자 화면에도 여기로 오는 링크가 있어 오가기 쉽고,
+                모바일에서 탭이 쌓이지 않는다. 관리자 화면의 '학생 화면' 링크만 잠깐 확인하는 용도라 새 탭이다.
+                역할을 아직 모르는 동안(undefined)에는 그리지 않아 잠깐 보였다 사라지는 일이 없다.
+                숨기는 것은 화면 처리일 뿐이고 권한은 admin-app 과 API 가 막는다. */}
+            {loggedIn && !locked && serviceRole === 'ADMIN' && (
+              <Navbar.Link href="/admin/">관리자 화면</Navbar.Link>
             )}
             {loggedIn ? (
               <Navbar.Link

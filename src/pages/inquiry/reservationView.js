@@ -1,6 +1,8 @@
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
+import { timeRangeLabel } from '../../utils/reservationTimeLabel';
+
 // 예약 선택 모달·예약 카드·내 문의 목록이 쓰는 표시 규칙(라벨·포맷·정렬).
 // 화면 로직은 여기에만 두고 컴포넌트는 그리기만 한다.
 
@@ -22,10 +24,11 @@ export const reservationStateLabel = (reservation, now = new Date()) => {
 
 // 서버가 만드는 스냅샷(reservationSummary)과 같은 포맷. 수정 모드에서 두 값이 한 자리에
 // 번갈아 보이고, 연도가 다른 예약이 같은 줄로 보이지 않게 연도를 붙인다.
+// 날짜는 시작일이고 끝은 공용 표기다('2026-10-20 23:30~24:00', '2026-10-20 23:00~01:00').
 export const formatReservationTime = reservation => {
   const start = new Date(reservation.reservationStartTime);
   const end = new Date(reservation.reservationEndTime);
-  return `${format(start, 'yyyy-MM-dd HH:mm')}~${format(end, 'HH:mm')}`;
+  return `${format(start, 'yyyy-MM-dd')} ${timeRangeLabel(start, end)}`;
 };
 
 export const formatRoom = reservation =>
@@ -45,11 +48,17 @@ export const sortReservationsLatestFirst = list => {
 // 스냅샷 문자열만 남는다(FK ON DELETE SET NULL). 목록 카드와 폼 스냅샷 카드가 같이 쓴다.
 export const CANCELED_RESERVATION_SUFFIX = ' · 취소된 예약';
 
+// 예전 서버는 자정을 넘는 끝을 '익일 HH:mm' 으로 적었다('2026-09-30 23:30~익일 01:30 306-2').
+// 저장된 스냅샷은 그대로 남아 있으므로 보일 때 지금 표기('23:30~01:30')로 맞춘다.
+export const normalizeReservationSummary = summary =>
+  summary.replace('~익일 ', '~');
+
 export const linkedReservationLabel = inquiry => {
   if (!inquiry?.reservationSummary) return null;
+  const summary = normalizeReservationSummary(inquiry.reservationSummary);
   return inquiry.reservationId == null
-    ? `${inquiry.reservationSummary}${CANCELED_RESERVATION_SUFFIX}`
-    : inquiry.reservationSummary;
+    ? `${summary}${CANCELED_RESERVATION_SUFFIX}`
+    : summary;
 };
 
 // 출석 이의 대상. 서버의 노쇼 판정(종료 시각 경과)과 같은 경계이고, 제한이 풀리며 PROCESSED 로
@@ -62,12 +71,12 @@ export const isDisputable = (reservation, now = new Date()) => {
   );
 };
 
-// 피커 카드용 — 날짜는 그룹 제목이 갖는다. 접근 이름에는 formatReservationTime(날짜 포함)을 쓴다.
+// 피커 카드용 — 날짜는 그룹 제목이 갖는다(시작일로 묶는다). 접근 이름에는 formatReservationTime(날짜 포함)을 쓴다.
 export const formatReservationTimeRange = reservation =>
-  `${format(new Date(reservation.reservationStartTime), 'HH:mm')}~${format(
+  timeRangeLabel(
+    new Date(reservation.reservationStartTime),
     new Date(reservation.reservationEndTime),
-    'HH:mm',
-  )}`;
+  );
 
 // 연도를 붙인다 — 이력이 100건을 넘는 학생은 지난해 같은 날짜가 함께 나온다.
 export const formatDateHeading = value =>

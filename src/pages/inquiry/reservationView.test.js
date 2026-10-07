@@ -7,6 +7,7 @@ import {
   groupByDate,
   isDisputable,
   linkedReservationLabel,
+  normalizeReservationSummary,
   reservationStateLabel,
   sortReservationsLatestFirst,
 } from './reservationView';
@@ -211,5 +212,60 @@ describe('linkedReservationLabel', () => {
         reservationSummary: '2026-08-30 10:00~11:00 201-A',
       }),
     ).toBe('2026-08-30 10:00~11:00 201-A · 취소된 예약');
+  });
+
+  // 예전 서버는 자정을 넘는 끝을 '익일 HH:mm' 으로 남겼다. 지금 표기로 맞춰 보여 준다.
+  it('옛 스냅샷의 익일은 지우고 지금 스냅샷은 그대로 둔다', () => {
+    expect(
+      linkedReservationLabel({
+        reservationId: 7,
+        reservationSummary: '2026-09-30 23:30~익일 01:30 306-2',
+      }),
+    ).toBe('2026-09-30 23:30~01:30 306-2');
+    expect(
+      linkedReservationLabel({
+        reservationId: null,
+        reservationSummary: '2026-09-30 23:30~익일 01:30 306-2',
+      }),
+    ).toBe('2026-09-30 23:30~01:30 306-2 · 취소된 예약');
+    expect(
+      linkedReservationLabel({
+        reservationId: 7,
+        reservationSummary: '2026-09-30 23:30~01:30 306-2',
+      }),
+    ).toBe('2026-09-30 23:30~01:30 306-2');
+    expect(normalizeReservationSummary('2026-10-20 23:30~24:00 306-1')).toBe(
+      '2026-10-20 23:30~24:00 306-1',
+    );
+  });
+});
+
+describe('자정 표기', () => {
+  const midnightEnd = reservation({
+    reservationStartTime: '2026-10-20T23:30:00+09:00',
+    reservationEndTime: '2026-10-21T00:00:00+09:00',
+  });
+  const nextDayEnd = reservation({
+    reservationStartTime: '2026-10-20T23:00:00+09:00',
+    reservationEndTime: '2026-10-21T01:00:00+09:00',
+  });
+
+  // 서버 스냅샷(ReservationTimeLabel)과 같은 모양이어야 수정 모드에서 두 값이 나란히 놓인다
+  it('날짜는 시작일이고 끝은 24:00 이거나 익일 없는 HH:mm 이다', () => {
+    expect(formatReservationTime(midnightEnd)).toBe('2026-10-20 23:30~24:00');
+    expect(formatReservationTime(nextDayEnd)).toBe('2026-10-20 23:00~01:00');
+    expect(formatReservationTime(nextDayEnd)).not.toMatch(/익일|전날/);
+  });
+
+  // 피커 카드는 날짜를 그룹 제목(시작일)으로 보인다
+  it('피커 카드의 시각도 같은 표기다', () => {
+    expect(formatReservationTimeRange(midnightEnd)).toBe('23:30~24:00');
+    expect(formatReservationTimeRange(nextDayEnd)).toBe('23:00~01:00');
+    expect(formatReservationTimeRange(nextDayEnd)).not.toMatch(/익일|전날/);
+  });
+
+  it('자정을 넘는 예약은 시작일 묶음에 든다', () => {
+    const groups = groupByDate([nextDayEnd]);
+    expect(groups.map(g => g.key)).toEqual(['2026-10-20']);
   });
 });

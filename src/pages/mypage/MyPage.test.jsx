@@ -207,3 +207,86 @@ describe('MyPage 이용 기록', () => {
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeVisible();
   });
 });
+
+// 24시간 운영 작업 전에 같은 날 끝나는 현재 예약의 표기를 고정해 둔다.
+describe('MyPage 현재 예약 표기', () => {
+  it('같은 날 끝나는 예약은 시작 날짜·시각과 종료 시각을 적는다', () => {
+    useLatestReservation.mockReturnValue({
+      data: [
+        {
+          reservationId: 1,
+          roomName: '306',
+          partitionNumber: 1,
+          reservationStartTime: '2026-10-20T10:00:00+09:00',
+          reservationEndTime: '2026-10-20T11:00:00+09:00',
+        },
+      ],
+    });
+    render(<MyPage />);
+
+    expect(
+      screen.getByText('306-1호 / 10월 20일 10:00 ~ 11:00'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('MyPage 현재 예약 자정 표기', () => {
+  const latest = (start, end) => ({
+    data: [
+      {
+        reservationId: 1,
+        roomName: '306',
+        partitionNumber: 1,
+        reservationStartTime: start,
+        reservationEndTime: end,
+      },
+    ],
+  });
+
+  it('자정에 끝나면 24:00 으로 적는다', () => {
+    useLatestReservation.mockReturnValue(
+      latest('2026-10-20T23:30:00+09:00', '2026-10-21T00:00:00+09:00'),
+    );
+    render(<MyPage />);
+
+    expect(
+      screen.getByText('306-1호 / 10월 20일 23:30 ~ 24:00'),
+    ).toBeInTheDocument();
+  });
+
+  // 시작 날짜가 시각 앞에 있다. '익일' 을 붙이지 않고 시각만 적는다.
+  it('다음 날에 끝나면 종료는 시각만 적는다', () => {
+    useLatestReservation.mockReturnValue(
+      latest('2026-10-20T23:00:00+09:00', '2026-10-21T01:00:00+09:00'),
+    );
+    render(<MyPage />);
+
+    expect(
+      screen.getByText('306-1호 / 10월 20일 23:00 ~ 01:00'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/익일|전날/)).toBeNull();
+  });
+
+  // 모바일은 날짜·시각 줄과 호실 줄을 나눠 적는다(useIsMobile 은 폭 500 이하).
+  it('모바일에서도 다음 날에 끝나면 종료는 시각만, 자정이면 24:00 이다', () => {
+    const width = window.innerWidth;
+    window.innerWidth = 400;
+    try {
+      useLatestReservation.mockReturnValue(
+        latest('2026-10-20T23:00:00+09:00', '2026-10-21T01:00:00+09:00'),
+      );
+      const { unmount } = render(<MyPage />);
+      expect(screen.getByText('10월 20일 23:00 ~ 01:00')).toBeInTheDocument();
+      expect(screen.queryByText(/익일|전날/)).toBeNull();
+      unmount();
+
+      useLatestReservation.mockReturnValue(
+        latest('2026-10-20T23:30:00+09:00', '2026-10-21T00:00:00+09:00'),
+      );
+      render(<MyPage />);
+      expect(screen.getByText('10월 20일 23:30 ~ 24:00')).toBeInTheDocument();
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+});

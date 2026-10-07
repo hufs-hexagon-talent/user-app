@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { Button, Checkbox, Table, Modal } from 'flowbite-react';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
 import { useCustomSnackbars } from '../../../components/snackbar/SnackBar';
+import { endTimeLabel } from '../../../utils/reservationTimeLabel';
 import { Pagination } from '@mui/material';
 
 const FetchUserReservations = () => {
@@ -149,7 +150,10 @@ const FetchUserReservations = () => {
                   {format(new Date(reservation.reservationStartTime), 'HH:mm')}
                 </Table.Cell>
                 <Table.Cell>
-                  {format(new Date(reservation.reservationEndTime), 'HH:mm')}
+                  {endTimeLabel(
+                    reservation.reservationStartTime,
+                    reservation.reservationEndTime,
+                  )}
                 </Table.Cell>
               </Table.Row>
             ))}

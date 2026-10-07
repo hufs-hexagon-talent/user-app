@@ -1,6 +1,9 @@
 import { format } from 'date-fns';
 
-import { linkedReservationLabel } from './reservationView';
+import {
+  linkedReservationLabel,
+  normalizeReservationSummary,
+} from './reservationView';
 
 // 내 문의 목록·상세의 표시 규칙. 컴포넌트는 그리기만 한다.
 
@@ -44,6 +47,8 @@ export const metaLabel = inquiry => {
 
 // 목록에서는 날짜·시간과 호실을 나눠 좁은 화면에서도 예약 시각 전체를 읽게 한다.
 // 기존 요약 문자열의 형식이 다르면 원문을 남긴다. 상세의 metaLabel 계약은 바꾸지 않는다.
+// 서버 스냅샷의 끝은 '24:00' 일 수 있고 시각 모양 그대로라 함께 읽힌다. 옛 스냅샷의 '23:30~익일 01:30' 은
+// 지금 표기('23:30~01:30')로 맞춘 뒤 읽는다.
 export const rowMeta = inquiry => {
   if (!inquiry) return null;
   if (
@@ -63,7 +68,7 @@ export const rowMeta = inquiry => {
     };
   }
   if (!inquiry.reservationSummary) return null;
-  const parts = inquiry.reservationSummary.match(
+  const parts = normalizeReservationSummary(inquiry.reservationSummary).match(
     /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}~\d{2}:\d{2}) (.+)$/,
   );
   if (!parts) return { fallback: reservationMeta(inquiry) };

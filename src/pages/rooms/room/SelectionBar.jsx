@@ -1,9 +1,18 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { Button } from 'flowbite-react';
-import { format } from 'date-fns';
+
+import { timeRangeLabel } from '../../../utils/reservationTimeLabel';
 
 // 고른 칸이 가로 스크롤로 화면 밖에 나가도 무엇을 골랐는지 남긴다.
-const SelectionBar = ({ roomLabel, from, to, disabled, onReserve }) => {
+// dateLabel 은 선택이 표의 날짜가 아닌 날에 시작할 때(익일 꼬리 칸에서 시작) 시각 앞에 붙이는 날짜다.
+const SelectionBar = ({
+  roomLabel,
+  dateLabel = null,
+  from,
+  to,
+  disabled,
+  onReserve,
+}) => {
   const barRef = useRef(null);
 
   // fixed 요소라 페이지 흐름에서 빠져 있다. 실제 높이만큼 문서 아래 자리를 잡아
@@ -34,7 +43,7 @@ const SelectionBar = ({ roomLabel, from, to, disabled, onReserve }) => {
       observer.disconnect();
       document.body.style.paddingBottom = '';
     };
-  }, [roomLabel, from, to]);
+  }, [roomLabel, dateLabel, from, to]);
 
   if (!roomLabel || !from || !to) return null;
 
@@ -44,7 +53,7 @@ const SelectionBar = ({ roomLabel, from, to, disabled, onReserve }) => {
       className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-gray-200 bg-white px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] md:hidden"
       style={{ paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom))' }}>
       <div className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
-        {`${roomLabel} · ${format(from, 'HH:mm')}~${format(to, 'HH:mm')}`}
+        {`${roomLabel} · ${dateLabel ? `${dateLabel} ` : ''}${timeRangeLabel(from, to)}`}
       </div>
       <Button
         color="dark"

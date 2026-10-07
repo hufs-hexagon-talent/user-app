@@ -1,48 +1,43 @@
-import { addMinutes, areIntervalsOverlapping, format } from 'date-fns';
+import { areIntervalsOverlapping } from 'date-fns';
 
-// 예약 현황 표의 시각 라벨을 만든다.
+import {
+  endMinuteLabel,
+  isSlotClosedForRoom,
+  MINUTES_PER_DAY,
+  slotBoundaries,
+  toMinutes,
+} from './operationWindow';
+
+export { normalizeOperationTime } from './operationWindow';
+
+// 제품 코드의 예약표는 operationWindow.buildSlots 로 칸을 만든다. 이 함수는 기존 테스트의 기대값을
+// 지키려고 남긴 호환 함수이고, 칸 경계는 buildSlots 와 같은 slotBoundaries 로 센다.
+// 예약 현황 표의 칸 경계 라벨을 만든다. 경계는 분 단위로 세고(operationWindow 와 같은 규칙) 라벨만 붙인다.
 // 마지막 항목은 표 본문에서 렌더하지 않고 그 앞 칸의 오른쪽 경계로만 쓰인다.
 // 마지막 항목을 운영 종료 시각으로 덮어쓰면 실제 칸 길이와 라벨이 어긋나므로 덮어쓰지 않는다.
+// 종료 { hour: 24, minute: 0 } 은 자정이다. 마지막 칸이 23:30~24:00 이 된다.
 export const createTimeTable = config => {
   const { startTime, endTime, intervalMinute } = config;
-  const start = new Date();
-  // 시작 시간에 맞게 지정
-  start.setHours(startTime.hour, startTime.minute, 0, 0);
-
-  const end = new Date();
-  // 종료 시간에 맞게 지정
-  end.setHours(endTime.hour, endTime.minute, 0, 0);
-
-  const timeTable = [];
-
-  // 시작시간으로 선언
-  let currentTime = start;
-  // 종료 시간이 될 떄 까지 intervalMinunte 간격으로 배열에 시간을 채워 넣음
-  while (currentTime <= end) {
-    timeTable.push(format(currentTime, 'HH:mm'));
-    currentTime = addMinutes(currentTime, intervalMinute);
-  }
-
-  return timeTable;
+  const start = startTime.hour * 60 + startTime.minute;
+  const end = Math.min(endTime.hour * 60 + endTime.minute, MINUTES_PER_DAY);
+  return slotBoundaries(start, end, intervalMinute).map(endMinuteLabel);
 };
 
-// 서버는 운영시간을 "HH:mm:ss" 로 준다. 표의 칸은 "HH:mm" 이라 자릿수를 맞춰 비교한다.
-export const normalizeOperationTime = time => {
-  if (typeof time !== 'string') return null;
-  return time.slice(0, 5);
-};
-
-// 칸의 시작 시각이 운영 시작 전이거나 운영 종료 이후(종료 시각과 같은 칸 포함)면 잠근다.
+// 칸 전체가 호실의 운영창 안에 있지 않으면 잠근다. 운영 시작 전 칸, 종료 시각과 같은 칸이 여기에 든다.
+// slot 은 칸 시작의 분(그날 0시부터) 또는 "HH:mm" 이다. 자정 정책(endsAtMidnight)이면 23:30 칸까지 연다.
+// 익일 꼬리는 보지 않는다. 예약표는 호실 객체를 받는 operationWindow.isSlotClosedForRoom 을 쓰고,
+// 이 함수는 같은 규칙에 운영시간 세 값만 넘기는 호환 함수다.
 export const isOutsideOperationHours = (
-  slotHm,
+  slot,
   operationStartTime,
   operationEndTime,
-) => {
-  const start = normalizeOperationTime(operationStartTime);
-  const end = normalizeOperationTime(operationEndTime);
-  if (!start || !end) return false;
-  return slotHm < start || slotHm >= end;
-};
+  endsAtMidnight = false,
+) =>
+  isSlotClosedForRoom(
+    { operationStartTime, operationEndTime, endsAtMidnight },
+    toMinutes(slot),
+    null,
+  );
 
 // [from, to) 안에 이미 잡힌 예약이 하나라도 있는지. 연장 선택이 남의 예약을 건너뛰지 못하게 한다.
 export const hasReservedSlotInRange = (reservationTimeRanges, from, to) => {
