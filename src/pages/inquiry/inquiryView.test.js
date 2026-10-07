@@ -105,6 +105,32 @@ describe('metaLabel', () => {
     ).toBe(`306${DELETED_ROOM_SUFFIX}`);
   });
 
+  it('시설 문의에 예약이 붙으면 방·발생 시각 뒤에 예약 요약을 잇고, 취소된 예약은 그렇게 적는다', () => {
+    const occurredAt = '2026-09-05T04:40:00Z';
+    expect(
+      metaLabel({
+        category: 'FACILITY',
+        roomId: 1,
+        roomName: '306',
+        occurredAt,
+        reservationId: 10,
+        reservationSummary: '2026-09-05 13:00~14:00 306-1',
+      }),
+    ).toBe(
+      `306 · 발생 ${format(new Date(occurredAt), 'yyyy-MM-dd HH:mm')} · 예약 2026-09-05 13:00~14:00 306-1`,
+    );
+    expect(
+      metaLabel({
+        category: 'FACILITY',
+        roomId: 1,
+        roomName: '306',
+        occurredAt: null,
+        reservationId: null,
+        reservationSummary: '2026-09-05 13:00~14:00 306-1',
+      }),
+    ).toBe('306 · 예약 2026-09-05 13:00~14:00 306-1 · 취소된 예약');
+  });
+
   it('시설 문의에 방도 시각도 없으면 연결 예약(구 폼 접수)으로 대신하고, 그것도 없으면 null', () => {
     expect(
       metaLabel({
@@ -160,6 +186,38 @@ describe('rowMeta', () => {
         reservationSummary: '2026-09-04 19:00~20:00 306-3',
       }),
     ).toMatchObject({ label: '예약', room: '306-3', notice: null });
+  });
+
+  // 시설 문의의 목록 행은 예약이 붙어도(취소됐어도) 발생 일시를 보인다. 예약 요약은 metaLabel 에만 잇는다.
+  it('예약이 붙은 시설 문의도 발생 일시를 보여준다', () => {
+    const occurredAt = '2026-09-05T04:40:00Z';
+    const expected = {
+      label: '발생',
+      date: format(new Date(occurredAt), 'yyyy-MM-dd'),
+      time: format(new Date(occurredAt), 'HH:mm'),
+      room: '306',
+      notice: null,
+    };
+    expect(
+      rowMeta({
+        category: 'FACILITY',
+        roomId: 1,
+        roomName: '306',
+        occurredAt,
+        reservationId: 10,
+        reservationSummary: '2026-09-05 13:00~14:00 306-1',
+      }),
+    ).toEqual(expected);
+    expect(
+      rowMeta({
+        category: 'FACILITY',
+        roomId: 1,
+        roomName: '306',
+        occurredAt,
+        reservationId: null,
+        reservationSummary: '2026-09-05 13:00~14:00 306-1',
+      }),
+    ).toEqual(expected);
   });
 
   it('해석할 수 없는 과거 요약을 버리지 않으며 메타가 없으면 null이다', () => {
