@@ -35,12 +35,15 @@ const facilityMeta = inquiry => {
   return parts.length > 0 ? parts.join(' · ') : null;
 };
 
-// 카드의 메타 한 줄. 시설 문의는 방·발생 시각, 그 외는 연결 예약. 시설 문의에 방·시각이
-// 없으면(서버 필드가 생기기 전에 접수된 문의, 구 폼) 연결 예약으로 대신한다. 없으면 null — 줄을 생략한다.
+// 카드의 메타 한 줄. 시설 문의는 방·발생 시각 뒤에 연결 예약을 잇고, 그 외는 연결 예약만. 시설 문의에
+// 방·시각이 없으면(서버 필드가 생기기 전에 접수된 문의, 구 폼) 연결 예약만 남는다. 둘 다 없으면 null 이고 줄을 생략한다.
 export const metaLabel = inquiry => {
   if (!inquiry) return null;
   if (inquiry.category === 'FACILITY') {
-    return facilityMeta(inquiry) ?? reservationMeta(inquiry);
+    const parts = [facilityMeta(inquiry), reservationMeta(inquiry)].filter(
+      Boolean,
+    );
+    return parts.length > 0 ? parts.join(' · ') : null;
   }
   return reservationMeta(inquiry);
 };

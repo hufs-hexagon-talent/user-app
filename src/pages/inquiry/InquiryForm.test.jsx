@@ -466,11 +466,15 @@ describe('InquiryForm 출석·예약 이의', () => {
 });
 
 describe('InquiryForm 시설·키오스크 고장', () => {
-  it('방을 고르기 전엔 제출이 비활성이고, 고르면 roomId 를 보내며 예약은 보내지 않는다', async () => {
+  it('방을 고르기 전엔 제출이 비활성이고, 고르면 roomId 를 보내며 예약을 고르지 않으면 reservationId 는 null 이다', async () => {
     render(<InquiryForm />);
     chooseCategory('시설·키오스크 고장');
     typeContent('키오스크가 꺼졌어요');
-    expect(screen.queryByRole('group', { name: '관련 예약' })).toBeNull();
+    expect(
+      within(screen.getByRole('group', { name: '관련 예약' })).getByText(
+        '선택',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '제출하기' })).toBeDisabled();
 
     pickRoom('306');
@@ -482,6 +486,32 @@ describe('InquiryForm 시설·키오스크 고장', () => {
         category: 'FACILITY',
         content: '키오스크가 꺼졌어요',
         reservationId: null,
+        roomId: 1,
+        occurredAt: null,
+      }),
+    );
+  });
+
+  // 키오스크 고장은 그 예약의 출석에 걸린다. 관리자가 문의 상세에서 그 예약을 바로 찾도록 고를 수 있게 한다.
+  it('예약 영역이 접히지 않은 채 보이고, 예약을 고르면 방과 함께 reservationId 를 보낸다', async () => {
+    render(<InquiryForm />);
+    chooseCategory('시설·키오스크 고장');
+    typeContent('키오스크가 QR 을 못 읽어요');
+    expect(screen.queryByRole('button', { name: /관련 예약 연결/ })).toBeNull();
+    pickRoom('306');
+    openPicker();
+    pickCard(CARD_A);
+    expect(screen.getByText('201-A')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '관련 예약 선택 해제' }),
+    ).toBeInTheDocument();
+    submit();
+
+    await waitFor(() =>
+      expect(doCreate).toHaveBeenCalledWith({
+        category: 'FACILITY',
+        content: '키오스크가 QR 을 못 읽어요',
+        reservationId: 10,
         roomId: 1,
         occurredAt: null,
       }),
@@ -734,8 +764,9 @@ describe('InquiryForm 기타', () => {
 });
 
 describe('InquiryForm 유형 전환', () => {
-  // 화면에서 숨긴 값이 제출되면 학생이 보이지도 지울 수도 없는 연결이 생긴다.
-  it('예약을 고른 뒤 시설로 바꾸면 예약이 비워지고, 방·시각을 고른 뒤 기타로 바꾸면 방·시각이 비워진다', async () => {
+  // 화면에서 숨긴 값이 제출되면 학생이 보이지도 지울 수도 없는 연결이 생긴다. 예약 영역은 시설에서도
+  // 보이므로 고른 예약은 남고, 시설 밖에서 숨는 방·시각만 비운다.
+  it('예약을 고른 뒤 시설로 바꾸면 예약이 남아 보이고, 방·시각을 고른 뒤 기타로 바꾸면 방·시각만 비워진다', async () => {
     render(<InquiryForm />);
     chooseCategory('기타');
     typeContent('전환 테스트');
@@ -744,17 +775,21 @@ describe('InquiryForm 유형 전환', () => {
     pickCard(CARD_A);
 
     chooseCategory('시설·키오스크 고장');
-    expect(screen.queryByText('201-A')).toBeNull();
+    expect(screen.getByText('201-A')).toBeInTheDocument();
     pickRoom('306');
     setOccurredAt(localValue(hoursAgo(1)));
 
     chooseCategory('기타');
+    expect(
+      screen.getByRole('button', { name: /관련 예약 연결/ }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('201-A')).toBeInTheDocument();
     submit();
     await waitFor(() =>
       expect(doCreate).toHaveBeenCalledWith({
         category: 'ETC',
         content: '전환 테스트',
-        reservationId: null,
+        reservationId: 10,
         roomId: null,
         occurredAt: null,
       }),
@@ -789,6 +824,29 @@ describe('InquiryForm 유형 전환', () => {
       expect(doCreate).toHaveBeenCalledWith(
         expect.objectContaining({ category: 'ETC', reservationId: 10 }),
       ),
+    );
+  });
+
+  it('출석에서 고른 예약은 시설로 바꿔도 카드로 남고 방과 함께 제출된다', async () => {
+    render(<InquiryForm />);
+    chooseCategory('출석·예약 이의');
+    typeContent('전환 테스트');
+    openPicker();
+    pickCard(CARD_A);
+
+    chooseCategory('시설·키오스크 고장');
+    expect(screen.getByText('201-A')).toBeInTheDocument();
+    pickRoom('428');
+    submit();
+
+    await waitFor(() =>
+      expect(doCreate).toHaveBeenCalledWith({
+        category: 'FACILITY',
+        content: '전환 테스트',
+        reservationId: 10,
+        roomId: 2,
+        occurredAt: null,
+      }),
     );
   });
 });
@@ -900,6 +958,9 @@ describe('InquiryForm 수정 모드', () => {
     expect(screen.getByLabelText(/언제 그랬나요/)).toHaveValue(
       localValue(occurredAt),
     );
+    expect(
+      screen.getByRole('button', { name: '예약 선택' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수정하기' })).toBeEnabled();
 
     pickRoom('306');
@@ -921,6 +982,50 @@ describe('InquiryForm 수정 모드', () => {
       3000,
     );
     expect(mockNavigate).toHaveBeenCalledWith('/inquiry');
+  });
+
+  // 수정의 reservationId null 은 기존 연결 유지다. 시설 문의라고 연결을 숨기거나 끊으면 안 된다.
+  it('예약이 연결된 시설 문의는 스냅샷과 안내를 보여주고, 바꾸지 않으면 reservationId 를 null 로, 바꾸면 그 예약을 보낸다', async () => {
+    mockEdit(
+      editInquiry({
+        inquiryId: 7,
+        category: 'FACILITY',
+        content: '키오스크가 QR 을 못 읽어요',
+        roomId: 1,
+        roomName: '306',
+      }),
+    );
+    render(<InquiryForm />);
+
+    expect(
+      screen.getByText('2026-08-05 10:00~11:00 201-A'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(LINKED_RESERVATION_HINT)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '다른 예약으로 변경' }),
+    ).toBeInTheDocument();
+    submit();
+    await waitFor(() =>
+      expect(doUpdate).toHaveBeenCalledWith({
+        inquiryId: 7,
+        category: 'FACILITY',
+        content: '키오스크가 QR 을 못 읽어요',
+        reservationId: null,
+        roomId: 1,
+        occurredAt: null,
+      }),
+    );
+    // 제출 래치는 navigate 와 같은 차례에 풀린다. 풀리기 전에 다시 누르면 삼켜진다.
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/inquiry'));
+
+    fireEvent.click(screen.getByRole('button', { name: '다른 예약으로 변경' }));
+    pickCard(CARD_B);
+    submit();
+    await waitFor(() =>
+      expect(doUpdate).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: 'FACILITY', reservationId: 20 }),
+      ),
+    );
   });
 
   it('시설 문의 수정에서 방 목록이 실패하면 기존 roomId 를 그대로 보낸다', async () => {

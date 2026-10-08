@@ -210,12 +210,9 @@ const InquiryForm = () => {
 
   const changeCategory = next => {
     setCategory(next);
-    // 숨긴 값이 제출되지 않게 반대편 상태를 비운다(서버도 정리하지만 이중 방어).
-    if (next === 'FACILITY') {
-      setPickedReservation(null);
-      setIsReservationOpen(false);
-      return;
-    }
+    // 예약 영역은 시설에서도 보이므로 고른 예약은 남긴다. 방·발생 시각은 시설 밖에서 숨으므로
+    // 제출되지 않게 비운다(서버도 정리하지만 이중 방어).
+    if (next === 'FACILITY') return;
     setRoomId(null);
     setOccurredAt('');
     // 기타로 오는데 고른·연결된 예약이 있으면 펼친 채로 — 출석에서 예약을 확정한 뒤 안내 문구를
@@ -267,11 +264,10 @@ const InquiryForm = () => {
       const payload = {
         category,
         content: content.trim(),
-        // 시설 문의는 예약을 갖지 않는다. 그 외에서 null 은 접수 "연결 없음", 수정 "유지".
-        reservationId:
-          !isFacility && pickedReservation
-            ? pickedReservation.reservationId
-            : null,
+        // 유형과 상관없이 고른 예약을 싣는다. null 은 접수 "연결 없음", 수정 "유지".
+        reservationId: pickedReservation
+          ? pickedReservation.reservationId
+          : null,
         // 시설 문의 상태를 통째로 보낸다(수정에서는 교체 — null 이면 지움).
         // 방 목록 실패 시 roomId 에는 수정 초기값(기존 방)이 그대로 남아 있다.
         roomId: isFacility ? roomId : null,
@@ -329,7 +325,7 @@ const InquiryForm = () => {
     );
   }
 
-  // 관련 예약 영역(출석은 항상, 기타는 토글로). 내용(카드/스냅샷/없음)만 상태별로 갈리고,
+  // 관련 예약 영역(출석·시설은 항상, 기타는 토글로). 내용(카드/스냅샷/없음)만 상태별로 갈리고,
   // 버튼 줄은 어떤 상태에서도 같은 자리에 그린다 — 주 버튼이 언마운트되지 않아야 모달이
   // 포커스를 되돌릴 곳을 잃지 않는다.
   let reservationContent = null;
@@ -590,6 +586,8 @@ const InquiryForm = () => {
                 </p>
               )}
             </div>
+
+            {reservationArea}
           </>
         )}
 
