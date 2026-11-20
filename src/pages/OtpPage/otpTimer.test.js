@@ -101,9 +101,7 @@ describe('getOtpView', () => {
   });
 
   it('보여 줄 QR 이 없이 실패하면 실패로 안내한다', () => {
-    expect(getOtpView({ ...base, hasOtp: false, isError: true })).toBe(
-      'error',
-    );
+    expect(getOtpView({ ...base, hasOtp: false, isError: true })).toBe('error');
   });
 
   it('실패한 채 유효 시간이 다 지나면 만료다', () => {

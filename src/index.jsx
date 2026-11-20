@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RecoilRoot } from 'recoil';
 import { queryClient } from './queryClient';
-const packagejson = require('../package.json');
 
 import SnackbarProvider from 'react-simple-snackbar';
 import 'swiper/css';

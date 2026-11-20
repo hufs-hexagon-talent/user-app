@@ -1,7 +1,15 @@
+import { vi } from 'vitest';
+const { mockRole, mockNavigate } = vi.hoisted(() => {
+  const mockRole = vi.fn();
+  const mockNavigate = vi.fn();
+  return {
+    mockRole,
+    mockNavigate,
+  };
+});
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { RecoilRoot } from 'recoil';
-
 import Footer from './Footer';
 import { authState } from '../../hooks/authState';
 
@@ -9,40 +17,43 @@ import { authState } from '../../hooks/authState';
 // 두는 이유는, 누가 다시 역할이나 로그인으로 푸터를 감쌌을 때 아래 테스트들이 그걸
 // 잡아야 해서다. user.api 를 통째로 목킹하면 useServiceRole 이 내부에서 useMe() 를
 // 부르지 않아 QueryClientProvider 가 필요 없다. 이동은 useNavigate 호출로 확인한다.
-const mockRole = jest.fn();
-jest.mock('../../api/user.api', () => ({
-  useServiceRole: () => ({ data: mockRole() }),
-}));
 
-const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
+vi.mock('../../api/user.api', () => ({
+  useServiceRole: () => ({
+    data: mockRole(),
+  }),
+}));
+vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
-
 const renderFooter = ({ loggedIn = false, role } = {}) => {
   mockRole.mockReturnValue(role);
   return render(
     <RecoilRoot
       initializeState={snap =>
-        snap.set(authState, { isAuthenticated: loggedIn })
+        snap.set(authState, {
+          isAuthenticated: loggedIn,
+        })
       }>
       <Footer />
     </RecoilRoot>,
   );
 };
-
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
-
 describe('Footer 이용 규칙 링크', () => {
   // 상단 네비에서 이용 규칙이 빠진 뒤, 로그인 화면에 있는 학생에게는 푸터가
   // 유일한 경로다. 초기 비밀번호를 확인하려는 사람이 여기서 막히면 안 된다.
   it('비로그인 방문자에게도 보이고, 누르면 이용 규칙 화면으로 이동한다', () => {
-    renderFooter({ loggedIn: false });
-
-    fireEvent.click(screen.getByRole('button', { name: '이용 규칙' }));
-
+    renderFooter({
+      loggedIn: false,
+    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '이용 규칙',
+      }),
+    );
     expect(mockNavigate).toHaveBeenCalledWith('/notice');
   });
 
@@ -53,26 +64,34 @@ describe('Footer 이용 규칙 링크', () => {
     ['관리실 계정', 'RESIDENT'],
     ['관리자', 'ADMIN'],
   ])('%s 에게도 보인다', (_label, role) => {
-    renderFooter({ loggedIn: true, role });
-
+    renderFooter({
+      loggedIn: true,
+      role,
+    });
     expect(
-      screen.getByRole('button', { name: '이용 규칙' }),
+      screen.getByRole('button', {
+        name: '이용 규칙',
+      }),
     ).toBeInTheDocument();
   });
 
   // 키보드로 누를 수 있어야 한다. div + onClick 이면 탭으로 닿지 않는다.
   it('버튼이라 탭으로 닿는다', () => {
-    renderFooter({ loggedIn: false });
-
-    expect(screen.getByRole('button', { name: '이용 규칙' }).tagName).toBe(
-      'BUTTON',
-    );
+    renderFooter({
+      loggedIn: false,
+    });
+    expect(
+      screen.getByRole('button', {
+        name: '이용 규칙',
+      }).tagName,
+    ).toBe('BUTTON');
   });
 
   // href 로 옮기면 전체 페이지가 다시 로드되어 화면 상태가 초기화된다.
   it('href 가 아니라 라우터로 이동한다', () => {
-    const { container } = renderFooter({ loggedIn: false });
-
+    const { container } = renderFooter({
+      loggedIn: false,
+    });
     expect(container.querySelector('a[href="/notice"]')).toBeNull();
   });
 });
@@ -85,12 +104,28 @@ describe('Footer 이용 규칙 링크', () => {
  */
 describe('Footer 관리자 링크', () => {
   it.each([
-    ['관리자', { loggedIn: true, role: 'ADMIN' }],
-    ['일반 사용자', { loggedIn: true, role: 'USER' }],
-    ['비로그인 방문자', { loggedIn: false }],
+    [
+      '관리자',
+      {
+        loggedIn: true,
+        role: 'ADMIN',
+      },
+    ],
+    [
+      '일반 사용자',
+      {
+        loggedIn: true,
+        role: 'USER',
+      },
+    ],
+    [
+      '비로그인 방문자',
+      {
+        loggedIn: false,
+      },
+    ],
   ])('%s 에게 관리자 진입점을 두지 않는다', (_label, options) => {
     renderFooter(options);
-
     expect(screen.queryByText('관리자')).toBeNull();
   });
 });
