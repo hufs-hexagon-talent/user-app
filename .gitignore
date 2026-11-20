@@ -24,3 +24,5 @@ yarn-error.log*
 
 .env
 src/pages/register/Register.jsx
+__pycache__/
+*.pyc
