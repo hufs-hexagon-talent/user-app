@@ -43,10 +43,14 @@ describe('스낵바 레이어', () => {
     );
 
     expect(
-      container.querySelector("[class*='snackbar-wrapper'] [class*='snackbar__text']"),
+      container.querySelector(
+        "[class*='snackbar-wrapper'] [class*='snackbar__text']",
+      ),
     ).toHaveTextContent('테스트 안내');
     expect(
-      container.querySelector("[class*='snackbar-wrapper'] [class*='snackbar__close']"),
+      container.querySelector(
+        "[class*='snackbar-wrapper'] [class*='snackbar__close']",
+      ),
     ).not.toBeNull();
   });
 });

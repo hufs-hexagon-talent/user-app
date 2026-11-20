@@ -1,3 +1,21 @@
+import { vi } from 'vitest';
+const {
+  mockOpenSuccessSnackbar,
+  mockOpenErrorSnackbar,
+  mockNavigate,
+  mockLogout,
+} = vi.hoisted(() => {
+  const mockOpenSuccessSnackbar = vi.fn();
+  const mockOpenErrorSnackbar = vi.fn();
+  const mockNavigate = vi.fn();
+  const mockLogout = vi.fn();
+  return {
+    mockOpenSuccessSnackbar,
+    mockOpenErrorSnackbar,
+    mockNavigate,
+    mockLogout,
+  };
+});
 import React from 'react';
 import {
   act,
@@ -6,48 +24,52 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-
 import { usePassword } from '../../api/user.api';
-
 import LoggedInPassword from './LoggedInPassword';
-
-jest.mock('../../api/user.api', () => ({
-  usePassword: jest.fn(),
+vi.mock('../../api/user.api', () => ({
+  usePassword: vi.fn(),
 }));
-
-const mockOpenSuccessSnackbar = jest.fn();
-const mockOpenErrorSnackbar = jest.fn();
-jest.mock('../../components/snackbar/SnackBar', () => ({
+vi.mock('../../components/snackbar/SnackBar', () => ({
   useCustomSnackbars: () => ({
     openSuccessSnackbar: mockOpenSuccessSnackbar,
     openErrorSnackbar: mockOpenErrorSnackbar,
   }),
 }));
-
-const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
+vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
-
-const mockLogout = jest.fn();
-jest.mock('../../hooks/useAuth', () => () => ({ logout: mockLogout }));
-
-const changePw = jest.fn();
+vi.mock('../../hooks/useAuth', () => ({
+  default: () => ({
+    logout: mockLogout,
+  }),
+}));
+const changePw = vi.fn();
 
 // 입력값은 파일에 적어 두지 않고 만들어 쓴다(비밀 스캐너가 자격 증명으로 잡는다).
 const RULE_OK = 'abcd' + '0123'; // 8자, 영문·숫자 포함
 const CURRENT = '2026' + '12345'; // 학번 그대로인 초기 비밀번호
 
 const fillAll = () => {
-  fireEvent.change(screen.getByPlaceholderText('기존 비밀번호를 입력해주세요'), {
-    target: { value: CURRENT },
-  });
+  fireEvent.change(
+    screen.getByPlaceholderText('기존 비밀번호를 입력해주세요'),
+    {
+      target: {
+        value: CURRENT,
+      },
+    },
+  );
   fireEvent.change(screen.getByPlaceholderText('새 비밀번호를 입력해주세요'), {
-    target: { value: RULE_OK },
+    target: {
+      value: RULE_OK,
+    },
   });
   fireEvent.change(
     screen.getByPlaceholderText('새 비밀번호를 한번 더 입력해주세요'),
-    { target: { value: RULE_OK } },
+    {
+      target: {
+        value: RULE_OK,
+      },
+    },
   );
 };
 
@@ -55,18 +77,26 @@ const fillAll = () => {
 // 원래 문제(같은 tick 의 두 번째 탭)를 재현하지 못한다.
 const doubleTap = async button => {
   await act(async () => {
-    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    button.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+      }),
+    );
+    button.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+      }),
+    );
   });
 };
-
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   changePw.mockResolvedValue({});
   mockLogout.mockResolvedValue(undefined);
-  usePassword.mockReturnValue({ mutateAsync: changePw });
+  usePassword.mockReturnValue({
+    mutateAsync: changePw,
+  });
 });
-
 describe('LoggedInPassword', () => {
   // 학번=비밀번호인 신입생은 라우터가 이 화면에 묶어 둔다. 느린 회선에서 더블탭하면 같은
   // 기존 비밀번호로 두 번 나가고, 첫 요청이 성공한 뒤 두 번째가 USER-006 으로 실패해
@@ -78,15 +108,19 @@ describe('LoggedInPassword', () => {
         resolveChange = resolve;
       }),
     );
-
     render(<LoggedInPassword />);
     fillAll();
-
-    await doubleTap(screen.getByRole('button', { name: '변경하기' }));
-
+    await doubleTap(
+      screen.getByRole('button', {
+        name: '변경하기',
+      }),
+    );
     expect(changePw).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: '변경 중...' })).toBeDisabled();
-
+    expect(
+      screen.getByRole('button', {
+        name: '변경 중...',
+      }),
+    ).toBeDisabled();
     await act(async () => {
       resolveChange({});
     });
@@ -100,15 +134,19 @@ describe('LoggedInPassword', () => {
       order.push('logout');
     });
     mockOpenSuccessSnackbar.mockImplementation(() => order.push('snackbar'));
-
     render(<LoggedInPassword />);
     fillAll();
-    fireEvent.click(screen.getByRole('button', { name: '변경하기' }));
-
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '변경하기',
+      }),
+    );
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith(
         '/login',
-        expect.objectContaining({ replace: true }),
+        expect.objectContaining({
+          replace: true,
+        }),
       ),
     );
     expect(order).toEqual(['logout', 'snackbar']);
@@ -117,33 +155,47 @@ describe('LoggedInPassword', () => {
       2500,
     );
   });
-
   it('실패하면 학생용 문구를 띄우고 버튼이 풀려 다시 시도할 수 있다', async () => {
     changePw.mockRejectedValueOnce(
       new Error('현재 비밀번호가 맞지 않습니다. 다시 확인해 주세요.'),
     );
-
     render(<LoggedInPassword />);
     fillAll();
-    fireEvent.click(screen.getByRole('button', { name: '변경하기' }));
-
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '변경하기',
+      }),
+    );
     await waitFor(() =>
       expect(mockOpenErrorSnackbar).toHaveBeenCalledWith(
         '현재 비밀번호가 맞지 않습니다. 다시 확인해 주세요.',
         2500,
       ),
     );
-    expect(screen.getByRole('button', { name: '변경하기' })).toBeEnabled();
-
-    fireEvent.click(screen.getByRole('button', { name: '변경하기' }));
+    expect(
+      screen.getByRole('button', {
+        name: '변경하기',
+      }),
+    ).toBeEnabled();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '변경하기',
+      }),
+    );
     await waitFor(() => expect(changePw).toHaveBeenCalledTimes(2));
   });
-
   it('입력이 비어 있으면 요청을 보내지 않고 버튼도 잠그지 않는다', () => {
     render(<LoggedInPassword />);
-    fireEvent.click(screen.getByRole('button', { name: '변경하기' }));
-
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '변경하기',
+      }),
+    );
     expect(changePw).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: '변경하기' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', {
+        name: '변경하기',
+      }),
+    ).toBeEnabled();
   });
 });

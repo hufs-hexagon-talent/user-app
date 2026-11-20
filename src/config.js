@@ -6,7 +6,7 @@ const runtime = value =>
 const config = {
   API_URL:
     runtime(window.env?.REACT_APP_API_URL) ||
-    process.env.REACT_APP_API_URL ||
+    import.meta.env.REACT_APP_API_URL ||
     'https://api.studyroom.computer.hufs.ac.kr',
   DEPARTMENT_ID: runtime(window.env?.REACT_APP_DEPARTMENT_ID) || 1,
 };

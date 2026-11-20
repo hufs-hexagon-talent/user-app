@@ -1,66 +1,190 @@
-name: Build and Push user-service
+name: Build and deploy user-app
 
 on:
   push:
-    branches:
-      - main
-      - qa
-  # PR 에서도 테스트만 돈다. 이미지 빌드·푸시는 아래 job 의 if 로 push 에만 묶는다.
+    branches: [main, qa]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      qa_run_id:
+        description: '기능 검증을 마친 QA 배포의 Actions 실행 ID'
+        required: true
+        type: string
 
-# API 주소 등 환경 값은 빌드가 아니라 컨테이너 기동 시점에
-# compose 의 environment 로 주입된다 (entrypoint.sh 가 config.js 를 치환).
+permissions:
+  contents: read
+
 env:
   ORG_NAME: hufs-hexagon-talent
   PROJECT_NAME: study-room-reservation
   SERVICE_NAME: user-app
+  IMAGE: ghcr.io/hufs-hexagon-talent/study-room-reservation-user-app
 
 jobs:
-  # 이미지를 만들기 전에 jest 를 돌린다. 테스트가 깨진 커밋은 qa·main 어느 쪽에도 배포되지 않는다.
-  # 노드 버전은 Dockerfile 의 빌드 스테이지(node:20)와 맞춘다.
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          node-version: 20
-          cache: yarn
-
-      - name: Install dependencies
+          persist-credentials: false
+      - name: Test digest promotion and restricted SSH invocation
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.23.5'
+      - run: corepack enable
+      - name: Install locked dependencies
         run: yarn install --frozen-lockfile
-
-      - name: Test
-        run: CI=true yarn test --watchAll=false
+      - name: Run the existing application checks
+        run: yarn test
+      - name: Collect source dependency vulnerability evidence
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: json
+          output: dependencies.trivy.json
+          exit-code: '0'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: dependencies-security-${{ github.sha }}
+          path: dependencies.trivy.json
+          retention-days: 14
 
   build-and-push:
     needs: test
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/qa')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        if: github.event_name == 'push'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Build one image for QA and production
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ env.ORG_NAME }}/${{ env.PROJECT_NAME }}-${{ env.SERVICE_NAME }}:${{ github.sha }}
-            ${{ github.ref == 'refs/heads/main' && format('ghcr.io/{0}/{1}-{2}:latest', env.ORG_NAME, env.PROJECT_NAME, env.SERVICE_NAME) || '' }}
-            ${{ github.ref == 'refs/heads/qa' && format('ghcr.io/{0}/{1}-{2}:qa', env.ORG_NAME, env.PROJECT_NAME, env.SERVICE_NAME) || '' }}
-          platforms: linux/amd64 #, linux/arm64/v8
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          sbom: ${{ github.event_name == 'push' }}
+          provenance: ${{ github.event_name == 'push' && 'mode=max' || 'false' }}
+      - name: Collect final image vulnerability evidence
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: ${{ github.event_name == 'push' && format('{0}@{1}', env.IMAGE, steps.build.outputs.digest) || format('{0}:{1}', env.IMAGE, github.sha) }}
+          format: json
+          output: image.trivy.json
+          exit-code: '0'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: image-security-${{ github.sha }}
+          path: image.trivy.json
+          retention-days: 14
+
+  deploy-web:
+    needs: [test, build-and-push]
+    if: >-
+      ${{ always() && needs.test.result == 'success' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/qa' && needs.build-and-push.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'qa' }}
+    concurrency:
+      group: web-digest-user-app-${{ github.ref == 'refs/heads/main' && 'production' || 'qa' }}
+      cancel-in-progress: false
+      # 늦게 끝난 옛 빌드가 최신 배포의 pending job 을 교체하지 못하게 한다.
+      queue: max
+    steps:
+      # Environment vars 는 job 이 environment 에 진입한 뒤 제공되므로 job-level if 에서 읽지 않는다.
+      # 초기 설정이 없으면 서버에 접속하지 않는다. Watchtower 전환은 운영자 채널에서 수행한다.
+      - name: Blue-green deployment is not enabled
+        if: vars.WEB_DEPLOY_ENABLED != 'true'
+        run: echo 'web blue-green deployment is disabled for this environment.'
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: vars.WEB_DEPLOY_ENABLED == 'true'
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Inspect the successful QA deployment run
+        id: qa_run
+        if: github.event_name == 'workflow_dispatch' && vars.WEB_DEPLOY_ENABLED == 'true'
+        env:
+          QA_RUN_ID: ${{ inputs.qa_run_id }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/ci/qa_release.py inspect-run
+
+      - name: Download that run's deployed QA release evidence
+        if: github.event_name == 'workflow_dispatch' && vars.WEB_DEPLOY_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.qa_run_id }}
+          name: ${{ steps.qa_run.outputs.artifact_name }}
+          path: ${{ runner.temp }}/user-app-qa-release
+
+      - name: Verify QA digest, source and the complete main tree
+        id: qa_release
+        if: github.event_name == 'workflow_dispatch' && vars.WEB_DEPLOY_ENABLED == 'true'
+        env:
+          QA_RUN_ID: ${{ inputs.qa_run_id }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/ci/qa_release.py verify --file "$RUNNER_TEMP/user-app-qa-release/release.json"
+
+      - name: Deploy the immutable web image
+        id: deploy
+        if: vars.WEB_DEPLOY_ENABLED == 'true'
+        env:
+          WEB_DEPLOY_ENABLED: ${{ vars.WEB_DEPLOY_ENABLED }}
+          WEB_DEPLOY_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'qa' }}
+          WEB_DEPLOY_IMAGE: ${{ github.event_name == 'workflow_dispatch' && steps.qa_release.outputs.image || format('ghcr.io/{0}/{1}-{2}@{3}', env.ORG_NAME, env.PROJECT_NAME, env.SERVICE_NAME, needs.build-and-push.outputs.image-digest) }}
+          WEB_DEPLOY_REVISION: ${{ github.event_name == 'workflow_dispatch' && steps.qa_release.outputs.revision || github.sha }}
+          WEB_QA_RELEASE_VERIFIED: ${{ steps.qa_release.outputs.verified }}
+          WEB_DEPLOY_PATH: ${{ vars.WEB_DEPLOY_PATH }}
+          WEB_DEPLOY_SSH_HOST: ${{ vars.WEB_DEPLOY_SSH_HOST }}
+          WEB_DEPLOY_SSH_USER: ${{ vars.WEB_DEPLOY_SSH_USER }}
+          WEB_DEPLOY_SSH_PORT: ${{ vars.WEB_DEPLOY_SSH_PORT }}
+          WEB_DEPLOY_SSH_KEY: ${{ secrets.WEB_DEPLOY_SSH_KEY }}
+          WEB_DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.WEB_DEPLOY_SSH_KNOWN_HOSTS }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/ci/deploy_web.py
+
+      - name: Record the release confirmed by the QA deployment receipt
+        if: github.event_name == 'push' && github.ref == 'refs/heads/qa' && steps.deploy.outputs.deployed == 'true'
+        env:
+          WEB_RELEASE_IMAGE: ghcr.io/${{ env.ORG_NAME }}/${{ env.PROJECT_NAME }}-${{ env.SERVICE_NAME }}@${{ needs.build-and-push.outputs.image-digest }}
+        run: python3 scripts/ci/qa_release.py write --file "$RUNNER_TEMP/user-app-qa-release/release.json"
+
+      - name: Preserve the deployed QA release for exact promotion
+        if: github.event_name == 'push' && github.ref == 'refs/heads/qa' && steps.deploy.outputs.deployed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: user-app-qa-release-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/user-app-qa-release/release.json
+          if-no-files-found: error
+          retention-days: 30

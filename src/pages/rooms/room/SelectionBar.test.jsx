@@ -1,55 +1,81 @@
+import { vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react';
-
 import SelectionBar from './SelectionBar';
-
 const props = (over = {}) => ({
   roomLabel: '306-1',
   from: new Date('2026-09-04T17:30:00'),
   to: new Date('2026-09-04T18:30:00'),
   disabled: false,
-  onReserve: jest.fn(),
+  onReserve: vi.fn(),
   ...over,
 });
-
 describe('SelectionBar', () => {
   it('선택이 없으면 아무것도 렌더하지 않는다', () => {
-    const { container } = render(<SelectionBar {...props({ from: null })} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('호실이 없으면 아무것도 렌더하지 않는다', () => {
     const { container } = render(
-      <SelectionBar {...props({ roomLabel: null })} />,
+      <SelectionBar
+        {...props({
+          from: null,
+        })}
+      />,
     );
     expect(container).toBeEmptyDOMElement();
   });
-
-  it('종료 시간이 없으면 아무것도 렌더하지 않는다', () => {
-    const { container } = render(<SelectionBar {...props({ to: null })} />);
+  it('호실이 없으면 아무것도 렌더하지 않는다', () => {
+    const { container } = render(
+      <SelectionBar
+        {...props({
+          roomLabel: null,
+        })}
+      />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
-
+  it('종료 시간이 없으면 아무것도 렌더하지 않는다', () => {
+    const { container } = render(
+      <SelectionBar
+        {...props({
+          to: null,
+        })}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
   it('호실과 시간을 보여준다', () => {
     const { getByText } = render(<SelectionBar {...props()} />);
     expect(getByText('306-1 · 17:30~18:30')).toBeInTheDocument();
   });
-
   it('예약하기를 누르면 onReserve 가 불린다', () => {
-    const onReserve = jest.fn();
-    const { getByRole } = render(<SelectionBar {...props({ onReserve })} />);
-    fireEvent.click(getByRole('button', { name: '예약하기' }));
+    const onReserve = vi.fn();
+    const { getByRole } = render(
+      <SelectionBar
+        {...props({
+          onReserve,
+        })}
+      />,
+    );
+    fireEvent.click(
+      getByRole('button', {
+        name: '예약하기',
+      }),
+    );
     expect(onReserve).toHaveBeenCalledTimes(1);
   });
-
   it('disabled 면 버튼이 잠긴다', () => {
     const { getByRole } = render(
-      <SelectionBar {...props({ disabled: true })} />,
+      <SelectionBar
+        {...props({
+          disabled: true,
+        })}
+      />,
     );
-    expect(getByRole('button', { name: '예약하기' })).toBeDisabled();
+    expect(
+      getByRole('button', {
+        name: '예약하기',
+      }),
+    ).toBeDisabled();
   });
 });
-
 describe('SelectionBar 본문 여백', () => {
   // jsdom 은 offsetHeight 를 항상 0 으로 보고하므로, 실제 바 높이가 있는 것처럼
   // 스텁을 세워야 ResizeObserver 콜백이 의미 있는 값을 읽는다.
@@ -66,7 +92,6 @@ describe('SelectionBar 본문 여백', () => {
   // 대입하는지를 검증할 수 있다.
   let originalOffsetHeightDescriptor;
   let paddingValue = '';
-
   beforeEach(() => {
     originalOffsetHeightDescriptor = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
@@ -78,7 +103,6 @@ describe('SelectionBar 본문 여백', () => {
         return 65;
       },
     });
-
     paddingValue = '';
     Object.defineProperty(document.body.style, 'paddingBottom', {
       configurable: true,
@@ -88,7 +112,6 @@ describe('SelectionBar 본문 여백', () => {
       },
     });
   });
-
   afterEach(() => {
     if (originalOffsetHeightDescriptor) {
       Object.defineProperty(
@@ -99,22 +122,17 @@ describe('SelectionBar 본문 여백', () => {
     }
     delete document.body.style.paddingBottom;
   });
-
   it('선택이 완전하면 바 높이만큼 본문 아래 여백을 둔다', () => {
     render(<SelectionBar {...props()} />);
     expect(document.body.style.paddingBottom).not.toBe('');
   });
-
   it('언마운트되면 여백을 지운다', () => {
     const { unmount } = render(<SelectionBar {...props()} />);
     expect(document.body.style.paddingBottom).not.toBe('');
-
     unmount();
-
     expect(document.body.style.paddingBottom).toBe('');
   });
 });
-
 describe('SelectionBar 자정 표기', () => {
   it('자정에 끝나면 24:00 으로 적는다', () => {
     const { getByText } = render(
@@ -141,7 +159,6 @@ describe('SelectionBar 자정 표기', () => {
     expect(getByText('306-1 · 23:00~01:00')).toBeInTheDocument();
     expect(queryByText(/익일|전날/)).toBeNull();
   });
-
   it('꼬리 칸에서 시작한 선택은 시각 앞에 시작일을 적고 같은 날 표기를 쓴다', () => {
     const { getByText } = render(
       <SelectionBar
