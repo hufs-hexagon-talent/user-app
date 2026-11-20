@@ -3,6 +3,11 @@
 // expect(element).toHaveTextContent(/react/i)
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
+import { TextDecoder, TextEncoder } from 'util';
+
+// Router 7 uses the Web Encoding API, which CRA's jsdom does not provide.
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
 
 // jsdom 은 window.scrollTo 가 미구현이라 호출 때마다 console.error 를 찍는다.
 // ScrollToTop 이 라우트 전환마다 부르므로 라우터 테스트가 조용하도록 막아 둔다.
