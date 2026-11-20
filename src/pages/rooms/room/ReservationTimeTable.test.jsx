@@ -1,9 +1,8 @@
+import { vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react';
-
 import { buildSlots } from './operationWindow';
 import ReservationTimeTable from './ReservationTimeTable';
-
 const room = (over = {}) => ({
   partitionId: 1,
   roomName: '세미나실',
@@ -17,7 +16,6 @@ const room = (over = {}) => ({
 
 // 09:00~11:00 이라 칸은 09:00, 09:30, 10:00, 10:30 네 개다
 const slots = buildSlots([room()], '2099-01-01');
-
 const setup = (over = {}) =>
   render(
     <ReservationTimeTable
@@ -26,11 +24,10 @@ const setup = (over = {}) =>
       selectedDate="2099-01-01"
       now={new Date('2099-01-01T00:00:00')}
       selection={null}
-      onCellClick={jest.fn()}
+      onCellClick={vi.fn()}
       {...over}
     />,
   );
-
 describe('ReservationTimeTable 열 구성', () => {
   it('헤더의 시각 열 수가 본문의 칸 수와 같다', () => {
     const { container } = setup();
@@ -50,14 +47,12 @@ describe('ReservationTimeTable 열 구성', () => {
     expect(first.textContent).toBe('09:00');
   });
 });
-
 describe('ReservationTimeTable 접근성', () => {
   it('칸마다 호실과 시각과 상태를 읽을 수 있는 이름이 붙는다', () => {
     const { container } = setup();
     const first = container.querySelector('tbody [data-time-index="0"]');
     expect(first).toHaveAttribute('aria-label', '세미나실-1 09:00 예약 가능');
   });
-
   it('고를 수 없는 칸은 aria-disabled 다', () => {
     const { container } = setup({
       rooms: [
@@ -74,23 +69,28 @@ describe('ReservationTimeTable 접근성', () => {
     const first = container.querySelector('tbody [data-time-index="0"]');
     expect(first).toHaveAttribute('aria-disabled', 'true');
   });
-
   it('엔터로도 칸을 고를 수 있다', () => {
-    const onCellClick = jest.fn();
-    const { container } = setup({ onCellClick });
+    const onCellClick = vi.fn();
+    const { container } = setup({
+      onCellClick,
+    });
     const first = container.querySelector('tbody [data-time-index="0"]');
-    fireEvent.keyDown(first, { key: 'Enter' });
+    fireEvent.keyDown(first, {
+      key: 'Enter',
+    });
     expect(onCellClick).toHaveBeenCalledTimes(1);
   });
-
   it('스페이스로도 칸을 고를 수 있다', () => {
-    const onCellClick = jest.fn();
-    const { container } = setup({ onCellClick });
+    const onCellClick = vi.fn();
+    const { container } = setup({
+      onCellClick,
+    });
     const first = container.querySelector('tbody [data-time-index="0"]');
-    fireEvent.keyDown(first, { key: ' ' });
+    fireEvent.keyDown(first, {
+      key: ' ',
+    });
     expect(onCellClick).toHaveBeenCalledTimes(1);
   });
-
   it('고를 수 없는 칸은 탭 순서에서 빠진다', () => {
     const { container } = setup({
       rooms: [
@@ -107,7 +107,6 @@ describe('ReservationTimeTable 접근성', () => {
     const first = container.querySelector('tbody [data-time-index="0"]');
     expect(first).toHaveAttribute('tabIndex', '-1');
   });
-
   it('내 예약 칸은 이름으로도 내 것임을 알 수 있고 고를 수 없다', () => {
     const { container } = setup({
       rooms: [
@@ -127,7 +126,6 @@ describe('ReservationTimeTable 접근성', () => {
     expect(first).toHaveAttribute('aria-disabled', 'true');
     expect(first).toHaveAttribute('tabIndex', '-1');
   });
-
   it('표에 무엇을 담은 표인지 설명이 있다', () => {
     const { container } = setup();
     expect(container.querySelector('caption').textContent).toBe(
@@ -135,7 +133,6 @@ describe('ReservationTimeTable 접근성', () => {
     );
   });
 });
-
 describe('ReservationTimeTable 자정 정책', () => {
   it('자정까지 여는 날은 48열이고 마지막 머리글은 23:30~24:00 이다', () => {
     const midnight = room({
@@ -147,7 +144,6 @@ describe('ReservationTimeTable 자정 정책', () => {
       rooms: [midnight],
       slots: buildSlots([midnight], '2099-01-01'),
     });
-
     const heads = container.querySelectorAll('thead [data-time-index]');
     expect(heads).toHaveLength(48);
     expect(heads[47]).toHaveAttribute('aria-label', '23:30~24:00');
@@ -169,24 +165,27 @@ describe('ReservationTimeTable 익일 꼬리', () => {
       ...over,
     });
   // 2099-01-02 01:30 KST
-  const tail = midnight({ overnightUntil: '2099-01-01T16:30:00Z' });
+  const tail = midnight({
+    overnightUntil: '2099-01-01T16:30:00Z',
+  });
   const other = midnight({
     partitionId: 2,
     partitionNumber: 2,
     overnightUntil: null,
   });
   const renderTail = (rooms = [tail, other]) =>
-    setup({ rooms, slots: buildSlots(rooms, '2099-01-01') });
+    setup({
+      rooms,
+      slots: buildSlots(rooms, '2099-01-01'),
+    });
   const heads = container =>
     container.querySelectorAll('thead [data-time-index]');
   const rowCells = (container, rowIndex) =>
     container
       .querySelectorAll('tbody tr')
       [rowIndex].querySelectorAll('[data-time-index]');
-
   it('꼬리 머리글의 접근 이름에 날짜를 넣고 첫 칸에 날짜 칩을 얹는다', () => {
     const { container } = renderTail();
-
     const cells = heads(container);
     expect(cells).toHaveLength(51);
     expect(cells[47]).toHaveAttribute('aria-label', '23:30~24:00');
@@ -199,10 +198,8 @@ describe('ReservationTimeTable 익일 꼬리', () => {
       Array.from(cells).filter(cell => cell.textContent.includes('(')),
     ).toHaveLength(1);
   });
-
   it('꼬리 칸의 접근 이름에 날짜를 넣고, 꼬리가 없는 호실은 잠근다', () => {
     const { container } = renderTail();
-
     expect(rowCells(container, 0)[49]).toHaveAttribute(
       'aria-label',
       '세미나실-1 1월 2일 00:30 예약 가능',
@@ -218,10 +215,8 @@ describe('ReservationTimeTable 익일 꼬리', () => {
     );
     expect(locked).toHaveAttribute('aria-disabled', 'true');
   });
-
   it('23:30 칸과 다음 날 00:00 칸 사이에 자정선을 긋는다', () => {
     const { container } = renderTail();
-
     [0, 1].forEach(row => {
       expect(rowCells(container, row)[47]).toHaveStyle({
         borderRight: '2px solid #002D56',
@@ -231,31 +226,29 @@ describe('ReservationTimeTable 익일 꼬리', () => {
       });
     });
   });
-
   it('꼬리가 없는 자정 날에는 자정선 없이 표를 닫는다', () => {
     const { container } = renderTail([other]);
-
     expect(heads(container)).toHaveLength(48);
     expect(rowCells(container, 0)[47]).toHaveStyle({
       borderRight: '1px solid #B6B4B0',
     });
   });
-
   it('꼬리 칸을 누르면 표는 선택을 판정하지 않고 칸 번호와 상태를 넘긴다', () => {
-    const onCellClick = jest.fn();
+    const onCellClick = vi.fn();
     const rooms = [tail];
     const { container } = setup({
       rooms,
       slots: buildSlots(rooms, '2099-01-01'),
       onCellClick,
     });
-
     fireEvent.click(rowCells(container, 0)[48]);
-
     expect(onCellClick).toHaveBeenCalledTimes(1);
     const [, timeIndex, state] = onCellClick.mock.calls[0];
     expect(timeIndex).toBe(48);
-    expect(state).toMatchObject({ status: 'free', selectable: true });
+    expect(state).toMatchObject({
+      status: 'free',
+      selectable: true,
+    });
   });
 });
 
@@ -267,7 +260,6 @@ describe('ReservationTimeTable 첫 스크롤 위치', () => {
   let offsetLeft;
   let offsetWidth;
   let scrollLeft;
-
   beforeEach(() => {
     offsetLeft = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
@@ -304,7 +296,6 @@ describe('ReservationTimeTable 첫 스크롤 위치', () => {
       },
     });
   });
-
   afterEach(() => {
     const restore = (name, descriptor) => {
       if (descriptor) {
@@ -317,19 +308,19 @@ describe('ReservationTimeTable 첫 스크롤 위치', () => {
     restore('offsetWidth', offsetWidth);
     restore('scrollLeft', scrollLeft);
   });
-
   const scrolledIndex = container =>
     container.querySelector('.MuiTableContainer-root').scrollLeft / CELL;
 
   // 두 날 모두 미래라 '오늘' 규칙을 타지 않는다
   const now = new Date('2098-12-31T12:00:00');
-  const plain = room({ operationEndTime: '22:00:00' });
+  const plain = room({
+    operationEndTime: '22:00:00',
+  });
   const allDay = room({
     operationStartTime: '00:00:00',
     operationEndTime: '23:30:00',
     endsAtMidnight: true,
   });
-
   it('00:00 부터 여는 미래 날짜는 09:00 칸에서 시작한다', () => {
     const { container } = setup({
       rooms: [allDay],
@@ -337,7 +328,6 @@ describe('ReservationTimeTable 첫 스크롤 위치', () => {
       selectedDate: '2099-01-02',
       now,
     });
-
     expect(scrolledIndex(container)).toBe(18);
   });
 
@@ -352,11 +342,10 @@ describe('ReservationTimeTable 첫 스크롤 위치', () => {
       now,
     });
     expect(scrolledIndex(container)).toBe(0);
-
     const props = {
       now,
       selection: null,
-      onCellClick: jest.fn(),
+      onCellClick: vi.fn(),
     };
     rerender(
       <ReservationTimeTable
@@ -374,10 +363,8 @@ describe('ReservationTimeTable 첫 스크롤 위치', () => {
         selectedDate="2099-01-02"
       />,
     );
-
     expect(scrolledIndex(container)).toBe(18);
   });
-
   it('30초 재조회로 칸 목록이 새로 와도 같은 날·같은 칸이면 위치를 되돌리지 않는다', () => {
     const { container, rerender } = setup({
       rooms: [allDay],
@@ -388,18 +375,20 @@ describe('ReservationTimeTable 첫 스크롤 위치', () => {
     const el = container.querySelector('.MuiTableContainer-root');
     // 학생이 가로로 밀어 둔 위치
     el.scrollLeft = 30 * CELL;
-
     rerender(
       <ReservationTimeTable
-        rooms={[{ ...allDay }]}
+        rooms={[
+          {
+            ...allDay,
+          },
+        ]}
         slots={buildSlots([allDay], '2099-01-02')}
         selectedDate="2099-01-02"
         now={new Date('2098-12-31T12:00:30')}
         selection={null}
-        onCellClick={jest.fn()}
+        onCellClick={vi.fn()}
       />,
     );
-
     expect(scrolledIndex(container)).toBe(30);
   });
 });

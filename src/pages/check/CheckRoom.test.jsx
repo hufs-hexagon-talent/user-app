@@ -1,3 +1,12 @@
+import { vi } from 'vitest';
+const { mockOpenSuccessSnackbar, mockOpenErrorSnackbar } = vi.hoisted(() => {
+  const mockOpenSuccessSnackbar = vi.fn();
+  const mockOpenErrorSnackbar = vi.fn();
+  return {
+    mockOpenSuccessSnackbar,
+    mockOpenErrorSnackbar,
+  };
+});
 import React from 'react';
 import {
   fireEvent,
@@ -7,7 +16,6 @@ import {
   within,
 } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-
 import { useMyInquiries } from '../../api/inquiry.api';
 import {
   useDeleteReservation,
@@ -16,51 +24,44 @@ import {
   useUserReservation,
 } from '../../api/reservation.api';
 import { useBlockedPeriod, useMyInfo } from '../../api/user.api';
-
 import Check from './CheckRoom';
-
-jest.mock('../../api/reservation.api', () => ({
-  useDeleteReservation: jest.fn(),
-  useLatestReservation: jest.fn(),
-  useNoShow: jest.fn(),
-  useUserReservation: jest.fn(),
+vi.mock('../../api/reservation.api', () => ({
+  useDeleteReservation: vi.fn(),
+  useLatestReservation: vi.fn(),
+  useNoShow: vi.fn(),
+  useUserReservation: vi.fn(),
 }));
-jest.mock('../../api/user.api', () => ({
-  useBlockedPeriod: jest.fn(),
-  useMyInfo: jest.fn(),
+vi.mock('../../api/user.api', () => ({
+  useBlockedPeriod: vi.fn(),
+  useMyInfo: vi.fn(),
 }));
-jest.mock('../../api/inquiry.api', () => ({
-  useMyInquiries: jest.fn(),
+vi.mock('../../api/inquiry.api', () => ({
+  useMyInquiries: vi.fn(),
 }));
-
-const mockOpenSuccessSnackbar = jest.fn();
-const mockOpenErrorSnackbar = jest.fn();
-jest.mock('../../components/snackbar/SnackBar', () => ({
+vi.mock('../../components/snackbar/SnackBar', () => ({
   useCustomSnackbars: () => ({
     openSuccessSnackbar: mockOpenSuccessSnackbar,
     openErrorSnackbar: mockOpenErrorSnackbar,
   }),
 }));
-
 const loaded = data => ({
   data,
   isPending: false,
   isError: false,
-  refetch: jest.fn(),
+  refetch: vi.fn(),
 });
 const pending = () => ({
   data: undefined,
   isPending: true,
   isError: false,
-  refetch: jest.fn(),
+  refetch: vi.fn(),
 });
 const failed = () => ({
   data: undefined,
   isPending: false,
   isError: true,
-  refetch: jest.fn(),
+  refetch: vi.fn(),
 });
-
 const reservation = (id, overrides = {}) => ({
   reservationId: id,
   reservationStartTime: '2099-01-01T10:00:00',
@@ -70,14 +71,18 @@ const reservation = (id, overrides = {}) => ({
   partitionNumber: 1,
   ...overrides,
 });
-
 const noShowOf = (count, list = []) => ({
   noShowCount: count,
-  reservationList: { reservationInfoResponses: list },
+  reservationList: {
+    reservationInfoResponses: list,
+  },
 });
-
 const openNoShowPopover = () =>
-  fireEvent.click(screen.getByRole('button', { name: '내 노쇼 현황' }));
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: '내 노쇼 현황',
+    }),
+  );
 
 // 표의 문의 링크가 <Link> 라 라우터 컨텍스트가 필요하다.
 const renderCheck = () =>
@@ -86,46 +91,49 @@ const renderCheck = () =>
       <Check />
     </MemoryRouter>,
   );
-
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   useNoShow.mockReturnValue(loaded(noShowOf(1)));
   useUserReservation.mockReturnValue(loaded([]));
   useLatestReservation.mockReturnValue(loaded([]));
-  useMyInfo.mockReturnValue(loaded({ name: '홍길동', serviceRole: 'USER' }));
+  useMyInfo.mockReturnValue(
+    loaded({
+      name: '홍길동',
+      serviceRole: 'USER',
+    }),
+  );
   useDeleteReservation.mockReturnValue({
-    mutateAsync: jest.fn().mockResolvedValue({}),
+    mutateAsync: vi.fn().mockResolvedValue({}),
     isPending: false,
   });
   useBlockedPeriod.mockReturnValue(loaded(null));
   useMyInquiries.mockReturnValue(loaded([]));
 });
-
 describe('예약 목록', () => {
   test('불러오는 중에는 로딩 문구를 보여준다', () => {
     useUserReservation.mockReturnValue(pending());
     renderCheck();
-
     expect(screen.getByText('예약 목록을 불러오는 중입니다.')).toBeVisible();
     expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
   });
-
   test('조회에 실패하면 빈 목록이 아니라 실패 문구와 다시 시도를 보여준다', () => {
     const query = failed();
     useUserReservation.mockReturnValue(query);
     renderCheck();
-
     expect(screen.getByText('예약 목록을 불러오지 못했습니다.')).toBeVisible();
     expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '다시 시도',
+      }),
+    );
     expect(query.refetch).toHaveBeenCalledTimes(1);
   });
 
   // react-query v5 는 재조회가 실패해도 data 를 유지한다. 앱 복귀(refetchOnWindowFocus) 때
   // 한 번 실패했다고 받아 둔 목록을 지우면 예약 취소·문의 경로가 통째로 사라진다.
   test('재조회에 실패해도 받아 둔 목록은 남기고 위에 안내만 얹는다', () => {
-    const refetch = jest.fn();
+    const refetch = vi.fn();
     useUserReservation.mockReturnValue({
       ...loaded([reservation(7)]),
       isError: true,
@@ -135,84 +143,109 @@ describe('예약 목록', () => {
 
     // 접근 이름은 다른 PR(fix/tap-targets)이 "… 예약 취소" 로 바꾼다. 어느 쪽이 먼저 들어와도 통과하게 둔다.
     expect(
-      screen.getByRole('button', { name: /^삭제$|예약 취소$/ }),
+      screen.getByRole('button', {
+        name: /^삭제$|예약 취소$/,
+      }),
     ).toBeInTheDocument();
     expect(screen.queryByText('예약 목록을 불러오지 못했습니다.')).toBeNull();
     const status = screen.getByRole('status');
     expect(status).toHaveTextContent('최신 예약 목록을 못 받아왔습니다.');
-    fireEvent.click(within(status).getByRole('button', { name: '다시 시도' }));
+    fireEvent.click(
+      within(status).getByRole('button', {
+        name: '다시 시도',
+      }),
+    );
     expect(refetch).toHaveBeenCalledTimes(1);
   });
-
   test('정상 조회한 예약이 없으면 표 대신 예약 현황으로 가는 안내를 보여준다', () => {
     renderCheck();
-
     expect(screen.getByText('아직 예약 내역이 없어요')).toBeVisible();
     expect(
-      screen.getByRole('link', { name: '예약 현황 보기' }),
+      screen.getByRole('link', {
+        name: '예약 현황 보기',
+      }),
     ).toHaveAttribute('href', '/');
     expect(screen.queryByRole('table')).toBeNull();
-    expect(screen.getByRole('button', { name: '내 노쇼 현황' })).toBeVisible();
+    expect(
+      screen.getByRole('button', {
+        name: '내 노쇼 현황',
+      }),
+    ).toBeVisible();
   });
-
   test('빈 목록 캐시의 재조회가 실패하면 예약 없음 대신 오류와 재시도를 보여준다', () => {
-    const refetch = jest.fn();
+    const refetch = vi.fn();
     useUserReservation.mockReturnValue({
       ...loaded([]),
       isError: true,
       refetch,
     });
     renderCheck();
-
     expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
     expect(screen.getByText('예약 목록을 불러오지 못했습니다.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '다시 시도',
+      }),
+    );
     expect(refetch).toHaveBeenCalledTimes(1);
   });
-
   test('예약이 있으면 목록을 보여준다', () => {
     useUserReservation.mockReturnValue(loaded([reservation(1)]));
     renderCheck();
-
     expect(screen.getByText('세미나실-1')).toBeVisible();
     expect(screen.queryByText('아직 예약 내역이 없어요')).toBeNull();
   });
-
   test('마지막 페이지의 예약이 사라지면 남은 페이지를 보여준다', () => {
-    const many = Array.from({ length: 6 }, (_, index) =>
-      reservation(index + 1, { partitionNumber: index + 1 }),
+    const many = Array.from(
+      {
+        length: 6,
+      },
+      (_, index) =>
+        reservation(index + 1, {
+          partitionNumber: index + 1,
+        }),
     );
     useUserReservation.mockReturnValue(loaded(many));
     const { rerender } = renderCheck();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Go to page 2',
+      }),
+    );
     expect(screen.getByText('세미나실-6')).toBeVisible();
-
     useUserReservation.mockReturnValue(loaded(many.slice(0, 5)));
     rerender(
       <MemoryRouter>
         <Check />
       </MemoryRouter>,
     );
-
     expect(screen.getByText('세미나실-1')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'page 1' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(
+      screen.getByRole('button', {
+        name: 'page 1',
+      }),
+    ).toHaveAttribute('aria-current', 'page');
   });
 });
-
 describe('예약 취소', () => {
   test('확인을 누르면 취소 요청을 보내고 성공 안내를 띄운다', async () => {
-    const mutateAsync = jest.fn().mockResolvedValue({});
-    useDeleteReservation.mockReturnValue({ mutateAsync, isPending: false });
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    useDeleteReservation.mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    });
     useUserReservation.mockReturnValue(loaded([reservation(7)]));
     renderCheck();
-
-    fireEvent.click(screen.getByRole('button', { name: /예약 취소$/ }));
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
-
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /예약 취소$/,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '확인',
+      }),
+    );
     await waitFor(() =>
       expect(mockOpenSuccessSnackbar).toHaveBeenCalledWith(
         '예약을 취소했습니다.',
@@ -222,9 +255,8 @@ describe('예약 취소', () => {
     expect(mutateAsync).toHaveBeenCalledTimes(1);
     expect(mutateAsync).toHaveBeenCalledWith(7);
   });
-
   test('취소 실패는 서버 원문 대신 학생용 문구를 띄운다', async () => {
-    const mutateAsync = jest.fn().mockRejectedValue({
+    const mutateAsync = vi.fn().mockRejectedValue({
       response: {
         status: 412,
         data: {
@@ -233,13 +265,22 @@ describe('예약 취소', () => {
         },
       },
     });
-    useDeleteReservation.mockReturnValue({ mutateAsync, isPending: false });
+    useDeleteReservation.mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    });
     useUserReservation.mockReturnValue(loaded([reservation(7)]));
     renderCheck();
-
-    fireEvent.click(screen.getByRole('button', { name: /예약 취소$/ }));
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
-
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /예약 취소$/,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '확인',
+      }),
+    );
     await waitFor(() =>
       expect(mockOpenErrorSnackbar).toHaveBeenCalledWith(
         '이미 출석한 예약은 취소할 수 없습니다.',
@@ -247,22 +288,27 @@ describe('예약 취소', () => {
       ),
     );
   });
-
   test('취소 요청이 진행 중이면 확인을 다시 누를 수 없다', () => {
-    const mutateAsync = jest.fn(() => new Promise(() => {}));
-    useDeleteReservation.mockReturnValue({ mutateAsync, isPending: true });
+    const mutateAsync = vi.fn(() => new Promise(() => {}));
+    useDeleteReservation.mockReturnValue({
+      mutateAsync,
+      isPending: true,
+    });
     useUserReservation.mockReturnValue(loaded([reservation(7)]));
     renderCheck();
-
-    fireEvent.click(screen.getByRole('button', { name: /예약 취소$/ }));
-    const confirm = screen.getByRole('button', { name: '확인' });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /예약 취소$/,
+      }),
+    );
+    const confirm = screen.getByRole('button', {
+      name: '확인',
+    });
     expect(confirm).toBeDisabled();
-
     fireEvent.click(confirm);
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 });
-
 describe('내 노쇼 현황 팝오버', () => {
   test('여는 시점에 제한 기간을 조회해 첫 열람부터 보여준다', () => {
     useBlockedPeriod.mockImplementation(({ enabled }) =>
@@ -276,29 +322,32 @@ describe('내 노쇼 현황 팝오버', () => {
         : pending(),
     );
     renderCheck();
-    expect(useBlockedPeriod).toHaveBeenLastCalledWith({ enabled: false });
-
+    expect(useBlockedPeriod).toHaveBeenLastCalledWith({
+      enabled: false,
+    });
     openNoShowPopover();
-
-    expect(useBlockedPeriod).toHaveBeenLastCalledWith({ enabled: true });
+    expect(useBlockedPeriod).toHaveBeenLastCalledWith({
+      enabled: true,
+    });
     expect(
       screen.getByText('현재 예약 제한 기간 : 2026-08-01 ~ 2026-09-01'),
     ).toBeVisible();
   });
-
   test('이미 제한 상태인 학생은 화면에 들어올 때 제한 기간을 미리 조회한다', () => {
     useMyInfo.mockReturnValue(
-      loaded({ name: '홍길동', serviceRole: 'BLOCKED' }),
+      loaded({
+        name: '홍길동',
+        serviceRole: 'BLOCKED',
+      }),
     );
     renderCheck();
-
-    expect(useBlockedPeriod).toHaveBeenLastCalledWith({ enabled: true });
+    expect(useBlockedPeriod).toHaveBeenLastCalledWith({
+      enabled: true,
+    });
   });
-
   test('제한 상태가 아니면 제한 기간 줄을 보여주지 않는다', () => {
     renderCheck();
     openNoShowPopover();
-
     expect(screen.queryByText(/예약 제한 기간/)).toBeNull();
     expect(screen.getByText(/방문하지 않은 횟수는 1번 입니다/)).toBeVisible();
   });
@@ -309,71 +358,76 @@ describe('내 노쇼 현황 팝오버', () => {
   // 빈 기간이 새는 것을 잡는다. 한쪽만 보도록 좁히는 변경은 이 픽스처로 잡히지 않는다.
   test('기간이 비어 온 차단 응답은 기간 줄을 그리지 않는다', () => {
     useMyInfo.mockReturnValue(
-      loaded({ name: '홍길동', serviceRole: 'BLOCKED' }),
+      loaded({
+        name: '홍길동',
+        serviceRole: 'BLOCKED',
+      }),
     );
     useBlockedPeriod.mockReturnValue(
-      loaded({ data: { startBlockedDate: null, endBlockedDate: null } }),
+      loaded({
+        data: {
+          startBlockedDate: null,
+          endBlockedDate: null,
+        },
+      }),
     );
     renderCheck();
     openNoShowPopover();
-
     expect(screen.queryByText(/예약 제한 기간/)).toBeNull();
     expect(screen.getByText(/방문하지 않은 횟수는 1번 입니다/)).toBeVisible();
   });
-
   test('팝오버 안을 눌러도 닫히지 않는다', () => {
     renderCheck();
     // 팝오버가 열리면 나머지 화면은 aria-hidden 이 되므로 버튼은 열기 전에 잡아 둔다.
-    const button = screen.getByRole('button', { name: '내 노쇼 현황' });
+    const button = screen.getByRole('button', {
+      name: '내 노쇼 현황',
+    });
     fireEvent.click(button);
     expect(button).toHaveAttribute('aria-describedby', 'simple-popover');
-
     fireEvent.click(screen.getByText(/방문하지 않은 횟수는 1번 입니다/));
-
     expect(button).toHaveAttribute('aria-describedby', 'simple-popover');
   });
-
   test('노쇼 횟수를 불러오기 전에는 횟수 문구를 보여주지 않는다', () => {
     useNoShow.mockReturnValue(pending());
     renderCheck();
     openNoShowPopover();
-
     expect(screen.getByText('노쇼 현황을 불러오는 중입니다.')).toBeVisible();
     expect(screen.queryByText(/undefined/)).toBeNull();
     expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
   });
-
   test('노쇼 횟수 조회에 실패하면 실패 문구와 다시 시도를 보여준다', () => {
     const query = failed();
     useNoShow.mockReturnValue(query);
     renderCheck();
     openNoShowPopover();
-
     expect(screen.getByText('노쇼 현황을 불러오지 못했습니다.')).toBeVisible();
     expect(screen.queryByText(/undefined/)).toBeNull();
     expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '다시 시도',
+      }),
+    );
     expect(query.refetch).toHaveBeenCalledTimes(1);
   });
-
   test('정상 0건과 빈 예약 배열이면 빈 표 대신 안내를 보이고 제한 설명은 유지한다', () => {
     useNoShow.mockReturnValue(loaded(noShowOf(0)));
     renderCheck();
     openNoShowPopover();
-
     expect(screen.getByText('미출석 예약이 없어요')).toBeVisible();
     expect(screen.getByText(/방문하지 않은 횟수는 0번 입니다/)).toBeVisible();
     expect(screen.getByText(/노쇼가 4회가 되면/)).toBeVisible();
     expect(screen.queryByRole('table')).toBeNull();
   });
-
   test('노쇼 0건이어도 예약 배열이 없거나 형식이 잘못되면 없음으로 단정하지 않는다', () => {
-    useNoShow.mockReturnValue(loaded({ noShowCount: 0 }));
+    useNoShow.mockReturnValue(
+      loaded({
+        noShowCount: 0,
+      }),
+    );
     const { rerender } = renderCheck();
     openNoShowPopover();
     expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
-
     useNoShow.mockReturnValue(loaded(noShowOf(0, {})));
     rerender(
       <MemoryRouter>
@@ -381,7 +435,6 @@ describe('내 노쇼 현황 팝오버', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
-
     useNoShow.mockReturnValue(loaded(noShowOf(1)));
     rerender(
       <MemoryRouter>
@@ -390,18 +443,15 @@ describe('내 노쇼 현황 팝오버', () => {
     );
     expect(screen.queryByText('미출석 예약이 없어요')).toBeNull();
   });
-
   test('제한 기간 조회에 실패하면 그 사실을 알린다', () => {
     useBlockedPeriod.mockReturnValue(failed());
     renderCheck();
     openNoShowPopover();
-
     expect(
       screen.getByText('예약 제한 기간을 불러오지 못했습니다.'),
     ).toBeVisible();
   });
 });
-
 describe('출석 문의 진입점', () => {
   const past = (id, over = {}) =>
     reservation(id, {
@@ -409,12 +459,15 @@ describe('출석 문의 진입점', () => {
       reservationEndTime: '2020-01-01T11:00:00',
       ...over,
     });
-
   test('표는 시작 시각 역순이다', () => {
     useUserReservation.mockReturnValue(
       loaded([
-        past(1, { partitionNumber: 1 }),
-        reservation(2, { partitionNumber: 2 }),
+        past(1, {
+          partitionNumber: 1,
+        }),
+        reservation(2, {
+          partitionNumber: 2,
+        }),
         past(3, {
           partitionNumber: 3,
           reservationStartTime: '2021-01-01T10:00:00',
@@ -423,7 +476,6 @@ describe('출석 문의 진입점', () => {
       ]),
     );
     renderCheck();
-
     const cells = screen.getAllByText(/세미나실-\d/).map(el => el.textContent);
     expect(cells).toEqual(['세미나실-2', '세미나실-3', '세미나실-1']);
   });
@@ -434,19 +486,24 @@ describe('출석 문의 진입점', () => {
     useUserReservation.mockReturnValue(
       loaded([
         past(1),
-        past(2, { reservationState: 'PROCESSED' }),
+        past(2, {
+          reservationState: 'PROCESSED',
+        }),
         reservation(3),
         reservation(4, {
           reservationState: 'NOT_VISITED',
           reservationStartTime: new Date(now - 10 * 60 * 1000).toISOString(),
           reservationEndTime: new Date(now + 50 * 60 * 1000).toISOString(),
         }),
-        reservation(5, { reservationState: 'VISITED' }),
+        reservation(5, {
+          reservationState: 'VISITED',
+        }),
       ]),
     );
     renderCheck();
-
-    const links = screen.getAllByRole('link', { name: /출석 문의하기$/ });
+    const links = screen.getAllByRole('link', {
+      name: /출석 문의하기$/,
+    });
     expect(links).toHaveLength(2);
     expect(links[0]).toHaveAttribute(
       'href',
@@ -454,20 +511,20 @@ describe('출석 문의 진입점', () => {
         '/inquiry/new?category=ATTENDANCE&reservationId=',
       ),
     );
-    expect(screen.getAllByRole('button', { name: /예약 취소$/ })).toHaveLength(
-      1,
-    );
+    expect(
+      screen.getAllByRole('button', {
+        name: /예약 취소$/,
+      }),
+    ).toHaveLength(1);
     expect(screen.getByText('이용 중')).toBeVisible();
     expect(screen.getByText('예약')).toBeVisible();
     expect(screen.getByText('미출석')).toBeVisible();
     expect(screen.getByText('처리됨')).toBeVisible();
     expect(screen.getByText('출석')).toBeVisible();
   });
-
   test('문의 링크는 그 예약의 딥링크를 갖고 접근 이름에 시각·호실이 있다', () => {
     useUserReservation.mockReturnValue(loaded([past(7)]));
     renderCheck();
-
     const link = screen.getByRole('link', {
       name: '2020-01-01 10:00~11:00 세미나실-1 출석 문의하기',
     });
@@ -484,7 +541,6 @@ describe('출석 문의 진입점', () => {
   test('삭제 버튼은 44px 탭 영역과 시각·호실이 든 접근 이름을 갖는다', () => {
     useUserReservation.mockReturnValue(loaded([reservation(7)]));
     renderCheck();
-
     const button = screen.getByRole('button', {
       name: /세미나실-1 예약 취소$/,
     });
@@ -497,7 +553,12 @@ describe('출석 문의 진입점', () => {
   test('이미 문의한 예약은 그 문의의 상세로 가는 문의 보기 링크가 된다', () => {
     useUserReservation.mockReturnValue(loaded([past(7), past(8)]));
     useMyInquiries.mockReturnValue(
-      loaded([{ inquiryId: 42, reservationId: 7 }]),
+      loaded([
+        {
+          inquiryId: 42,
+          reservationId: 7,
+        },
+      ]),
     );
     renderCheck();
 
@@ -508,7 +569,9 @@ describe('출석 문의 진입점', () => {
       }),
     ).toHaveAttribute('href', '/inquiry/42');
     expect(
-      screen.getAllByRole('link', { name: /출석 문의하기$/ }),
+      screen.getAllByRole('link', {
+        name: /출석 문의하기$/,
+      }),
     ).toHaveLength(1);
   });
 
@@ -517,16 +580,22 @@ describe('출석 문의 진입점', () => {
     useUserReservation.mockReturnValue(loaded([past(7)]));
     useMyInquiries.mockReturnValue(
       loaded([
-        { inquiryId: 9, reservationId: 7 },
-        { inquiryId: 3, reservationId: 7 },
+        {
+          inquiryId: 9,
+          reservationId: 7,
+        },
+        {
+          inquiryId: 3,
+          reservationId: 7,
+        },
       ]),
     );
     renderCheck();
-
-    expect(screen.getByRole('link', { name: /문의 보기$/ })).toHaveAttribute(
-      'href',
-      '/inquiry/9',
-    );
+    expect(
+      screen.getByRole('link', {
+        name: /문의 보기$/,
+      }),
+    ).toHaveAttribute('href', '/inquiry/9');
   });
 
   // 문의 목록을 못 읽었다고 진입점을 없애면 이의를 아예 못 낸다. 중복 접수보다 그쪽이 나쁘다.
@@ -535,39 +604,53 @@ describe('출석 문의 진입점', () => {
     useMyInquiries.mockReturnValue(pending());
     const { unmount } = renderCheck();
     expect(
-      screen.getByRole('link', { name: /출석 문의하기$/ }),
+      screen.getByRole('link', {
+        name: /출석 문의하기$/,
+      }),
     ).toBeInTheDocument();
     unmount();
-
     useMyInquiries.mockReturnValue(failed());
     renderCheck();
     expect(
-      screen.getByRole('link', { name: /출석 문의하기$/ }),
+      screen.getByRole('link', {
+        name: /출석 문의하기$/,
+      }),
     ).toBeInTheDocument();
   });
 
   // 페이지당 5건이라, 정렬이 페이지를 나누기 전에 일어나지 않으면 첫 페이지에 옛 예약이 섞인다.
   test('정렬은 페이지를 나누기 전에 적용된다', () => {
-    const older = Array.from({ length: 5 }, (_, index) =>
-      past(index + 1, { partitionNumber: index + 1 }),
+    const older = Array.from(
+      {
+        length: 5,
+      },
+      (_, index) =>
+        past(index + 1, {
+          partitionNumber: index + 1,
+        }),
     );
     useUserReservation.mockReturnValue(
-      loaded([...older, reservation(9, { partitionNumber: 9 })]),
+      loaded([
+        ...older,
+        reservation(9, {
+          partitionNumber: 9,
+        }),
+      ]),
     );
     renderCheck();
-
     expect(screen.getByText('세미나실-9')).toBeVisible();
     expect(screen.queryByText('세미나실-5')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Go to page 2',
+      }),
+    );
     expect(screen.getByText('세미나실-5')).toBeVisible();
   });
-
   test('노쇼 팝오버의 행에도 문의 링크가 있다', () => {
     useNoShow.mockReturnValue(loaded(noShowOf(1, [past(9)])));
     renderCheck();
     openNoShowPopover();
-
     expect(
       screen.getByRole('link', {
         name: '2020-01-01 10:00~11:00 세미나실-1 출석 문의하기',
@@ -583,11 +666,9 @@ describe('출석 문의 진입점', () => {
 describe('같은 날 끝나는 예약의 시각 표기', () => {
   const cellTexts = row =>
     Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
-
   test('내 예약 표는 날짜·시작·종료를 그대로 적는다', () => {
     useUserReservation.mockReturnValue(loaded([reservation(1)]));
     renderCheck();
-
     const row = screen.getByText('세미나실-1').closest('tr');
     expect(cellTexts(row).slice(1, 5)).toEqual([
       '세미나실-1',
@@ -601,7 +682,6 @@ describe('같은 날 끝나는 예약의 시각 표기', () => {
       }),
     ).toBeInTheDocument();
   });
-
   test('미출석 표도 날짜·시작·종료를 그대로 적는다', () => {
     const missed = reservation(3, {
       reservationStartTime: '2020-01-01T10:00:00',
@@ -610,7 +690,6 @@ describe('같은 날 끝나는 예약의 시각 표기', () => {
     useNoShow.mockReturnValue(loaded(noShowOf(1, [missed])));
     renderCheck();
     openNoShowPopover();
-
     const row = within(screen.getByRole('presentation'))
       .getByText('세미나실-1')
       .closest('tr');
@@ -622,11 +701,9 @@ describe('같은 날 끝나는 예약의 시각 표기', () => {
     ]);
   });
 });
-
 describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
   const cellTexts = row =>
     Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
-
   test('자정에 끝나면 종료를 24:00 으로 적는다', () => {
     useUserReservation.mockReturnValue(
       loaded([
@@ -637,7 +714,6 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
       ]),
     );
     renderCheck();
-
     const row = screen.getByText('세미나실-1').closest('tr');
     expect(cellTexts(row).slice(2, 5)).toEqual(['10-20', '23:30', '24:00']);
     expect(
@@ -658,7 +734,6 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
       ]),
     );
     renderCheck();
-
     const row = screen.getByText('세미나실-1').closest('tr');
     expect(cellTexts(row).slice(2, 5)).toEqual(['10-20', '23:00', '01:00']);
     expect(row.textContent).not.toMatch(/익일|전날/);
@@ -668,7 +743,6 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
       }),
     ).toBeInTheDocument();
   });
-
   test('미출석 표도 같은 규칙으로 종료를 적는다', () => {
     const missed = reservation(3, {
       reservationStartTime: '2020-10-20T23:30:00+09:00',
@@ -677,7 +751,6 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
     useNoShow.mockReturnValue(loaded(noShowOf(1, [missed])));
     renderCheck();
     openNoShowPopover();
-
     const row = within(screen.getByRole('presentation'))
       .getByText('세미나실-1')
       .closest('tr');
@@ -688,7 +761,6 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
       '24:00',
     ]);
   });
-
   test('미출석 표도 다음 날에 끝나면 종료를 시각만 적는다', () => {
     const missed = reservation(3, {
       reservationStartTime: '2020-10-20T23:00:00+09:00',
@@ -697,7 +769,6 @@ describe('자정에 끝나거나 넘는 예약의 시각 표기', () => {
     useNoShow.mockReturnValue(loaded(noShowOf(1, [missed])));
     renderCheck();
     openNoShowPopover();
-
     const row = within(screen.getByRole('presentation'))
       .getByText('세미나실-1')
       .closest('tr');

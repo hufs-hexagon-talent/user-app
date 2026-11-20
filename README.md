@@ -11,3 +11,7 @@
 웹 재생성은 짧은 중단이 있을 수 있어 운영 배포는 04:00~04:29 KST에 시작하며 30분 안에 적용·복구한다. 이전 이미지와 실제 환경을 서버의 비공개 snapshot으로 복구한다. API와 스택 잠금을 공유하고 sequence는 서비스별로 관리한다. Watchtower 전환·수동 rollback·서버 준비 절차는 infra `deploy/README.md`를 따른다.
 
 Node 22.23.5와 nginx 1.30.7 이미지는 digest로 고정한다. 최종 이미지의 SBOM/provenance에는 [빌드 stage 의존성도 포함](https://docs.docker.com/build/metadata/attestations/sbom/)하며, source dependency와 최종 image 취약점 보고서를 각각 보존한다. 보고서 생성 성공이 취약점 해소 완료를 뜻하지 않는다.
+
+## 개발·검증
+
+Node 22.23.5, Vite 8.3.7, Vitest 4.1.12를 사용한다. `yarn start`는 3000 포트 개발 서버, `yarn test`는 유한한 전체 테스트, `yarn build`는 ESLint 검사와 production build다. 기존 React 18·Recoil·MUI·Tailwind·SPA 경로를 유지하고 출력은 `build`다. 환경 값은 기존 `config.js` 런타임 주입을 우선 사용한다. 테스트 worker는 기존과 같이 Asia/Seoul로 시작한다.
