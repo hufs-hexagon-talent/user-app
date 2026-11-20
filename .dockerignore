@@ -5,3 +5,15 @@ build
 **/.git
 **/.DS_Store
 **/node_modules
+.git
+dist
+.env
+.env.local
+.env.*.local
+*.log
+__pycache__
+**/__pycache__
+.web-deploy
+.yarn/install-state.gz
+.yarn/unplugged
+.pnp.*
