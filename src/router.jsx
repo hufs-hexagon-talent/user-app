@@ -29,7 +29,7 @@ import MyInquiries from './pages/inquiry/MyInquiries';
 import InquiryForm from './pages/inquiry/InquiryForm';
 import InquiryDetail from './pages/inquiry/InquiryDetail';
 
-// USER·BLOCKED·ADMIN 세 블록이 공유한다(RESIDENT 제외) — BLOCKED 학생이 노쇼 이의를
+// USER·BLOCKED·ADMIN 세 블록이 공유한다(KIOSK 제외) — BLOCKED 학생이 노쇼 이의를
 // 접수하는 주 대상이라 빼면 기능 취지에 어긋난다.
 const inquiryRoutes = (
   <>
@@ -150,7 +150,7 @@ const RouterComponent = () => {
                 {inquiryRoutes}
               </>
             )}
-            {loggedIn && serviceRole === 'RESIDENT' && (
+            {loggedIn && serviceRole === 'KIOSK' && (
               <>
                 <Route path="/notice" element={<Notice />} />
                 <Route path="/qrcheck" element={<QrCheck />} />

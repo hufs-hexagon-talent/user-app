@@ -106,8 +106,8 @@ describe('/inquiry 라우트', () => {
       expect(screen.getByText('MYINQUIRIES_MOUNTED')).toBeInTheDocument(),
     );
   });
-  test('관리실(RESIDENT) 계정은 문의 화면에 도달하지 못하고 홈으로 되돌아간다', async () => {
-    global.__me = me('RESIDENT');
+  test('키오스크 계정(KIOSK) 계정은 문의 화면에 도달하지 못하고 홈으로 되돌아간다', async () => {
+    global.__me = me('KIOSK');
     renderAt('/inquiry');
     await waitFor(() =>
       expect(screen.getByText('예약 현황 화면')).toBeInTheDocument(),
@@ -141,8 +141,8 @@ describe('/inquiry 라우트', () => {
     );
     expect(screen.queryByText('INQUIRYDETAIL_MOUNTED')).toBeNull();
   });
-  test('관리실(RESIDENT) 계정은 상세에도 도달하지 못한다', async () => {
-    global.__me = me('RESIDENT');
+  test('키오스크 계정(KIOSK) 계정은 상세에도 도달하지 못한다', async () => {
+    global.__me = me('KIOSK');
     renderAt('/inquiry/12');
     await waitFor(() =>
       expect(screen.getByText('예약 현황 화면')).toBeInTheDocument(),

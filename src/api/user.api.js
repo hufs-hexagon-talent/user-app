@@ -14,7 +14,9 @@ export const fetchMe = async () => {
   // 부팅 복원은 이 응답을 기다려야 화면이 열린다. 공통 타임아웃(15초)으로
   // 재시도까지 돌면 약 48초를 스피너만 보게 되어 짧게 끊는다.
   const me_res = await apiClient.get('/users/me', { timeout: ME_TIMEOUT_MS });
-  return me_res.data.data;
+  const me = me_res.data.data;
+  // 이전 API 슬롯에서 복원한 세션에도 같은 출석 메뉴를 제공한다.
+  return me?.serviceRole === 'RESIDENT' ? { ...me, serviceRole: 'KIOSK' } : me;
 };
 
 // 인증 오류가 401/403 으로만 오지 않는다. 토큰의 사용자를 못 찾으면 404(USER-001),

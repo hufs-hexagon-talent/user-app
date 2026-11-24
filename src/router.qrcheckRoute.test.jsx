@@ -77,8 +77,8 @@ describe('/qrcheck 라우트', () => {
     );
     expect(screen.queryByText('QRCHECK_MOUNTED')).toBeNull();
   });
-  test('관리실 계정은 그대로 출석 화면을 연다', async () => {
-    global.__me = me('RESIDENT');
+  test('키오스크 계정은 그대로 출석 화면을 연다', async () => {
+    global.__me = me('KIOSK');
     renderAt('/qrcheck');
     await waitFor(() =>
       expect(screen.getByText('QRCHECK_MOUNTED')).toBeInTheDocument(),
