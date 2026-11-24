@@ -46,7 +46,7 @@ const QrCheck = () => {
     navigate('/');
   }, [me, navigate, openSnackbar, closeSnackbar]);
 
-  // 접근 제어는 라우트 마운트(RESIDENT 만 /qrcheck 존재)가 담당한다.
+  // 접근 제어는 라우트 마운트(KIOSK 만 /qrcheck 존재)가 담당한다.
   // 여기는 로그인이 풀린 경우의 방어만 남긴다.
   useEffect(() => {
     if (!loggedIn) {

@@ -41,8 +41,8 @@ const renderAt = (role, path, { loggedIn = true, locked = false } = {}) => {
 };
 const renderAs = role => renderAt(role, '/');
 describe('NavigationBar 출석 체크 링크', () => {
-  test('관리실 계정에게는 출석 체크 링크가 보인다', () => {
-    renderAs('RESIDENT');
+  test('키오스크 계정에게는 출석 체크 링크가 보인다', () => {
+    renderAs('KIOSK');
     expect(
       screen.getByRole('link', {
         name: '출석 체크',
@@ -92,7 +92,7 @@ describe('NavigationBar 관리자 화면 링크', () => {
   it.each([
     ['일반 사용자', 'USER', {}],
     ['이용 정지된 사용자', 'BLOCKED', {}],
-    ['관리실 계정', 'RESIDENT', {}],
+    ['키오스크 계정', 'KIOSK', {}],
     // 역할 조회가 끝나기 전에 그리면 잠깐 보였다 사라진다.
     ['역할을 아직 모르는 동안', undefined, {}],
     // 기본 비밀번호를 바꾸기 전에는 비밀번호 화면 밖으로 보내지 않는다.
@@ -152,15 +152,15 @@ describe('NavigationBar 고정', () => {
   });
 });
 
-// 이용 규칙은 마이페이지 안으로 내려갔다. 마이페이지가 없는 사람들(비로그인·관리실 계정·
+// 이용 규칙은 마이페이지 안으로 내려갔다. 마이페이지가 없는 사람들(비로그인·키오스크 계정·
 // 비밀번호 변경 강제 상태)은 푸터에서 들어간다.
 describe('NavigationBar 이용 규칙 링크 제거', () => {
   test('상단에 /notice 로 가는 링크가 없다', () => {
     const { container } = renderAt('USER', '/');
     expect(container.querySelector('a[href="/notice"]')).toBeNull();
   });
-  test('관리실 계정 메뉴에도 /notice 로 가는 링크가 없다', () => {
-    const { container } = renderAt('RESIDENT', '/qrcheck');
+  test('키오스크 계정 메뉴에도 /notice 로 가는 링크가 없다', () => {
+    const { container } = renderAt('KIOSK', '/qrcheck');
     expect(container.querySelector('a[href="/notice"]')).toBeNull();
   });
 });
@@ -207,8 +207,8 @@ describe('NavigationBar 현재 탭 표시', () => {
       }),
     ).toHaveAttribute('aria-current', 'page');
   });
-  test('관리실 계정의 출석 체크도 현재 위치 표시를 받는다', () => {
-    renderAt('RESIDENT', '/qrcheck');
+  test('키오스크 계정의 출석 체크도 현재 위치 표시를 받는다', () => {
+    renderAt('KIOSK', '/qrcheck');
     expect(
       screen.getByRole('link', {
         name: '출석 체크',

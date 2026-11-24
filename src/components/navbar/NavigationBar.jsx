@@ -21,7 +21,7 @@ const ACTIVE_LINK_CLASS = [
 // 네 탭이 모두 회색이라 어느 갈래에 있는지 알 수 없었다. 마이페이지 탭을 켜 둔다.
 // 문의는 접수·수정 화면이 하위 경로로 더 있어 그 아래까지 포함한다.
 // 내 QR코드(/otp)는 마이페이지 메뉴에도 있지만 상단에 자기 탭이 있으므로 넣지 않는다.
-// 이용 규칙(/notice)은 푸터로도 들어오지만, 그 경로로 오는 비로그인·관리실 계정은
+// 이용 규칙(/notice)은 푸터로도 들어오지만, 그 경로로 오는 비로그인·키오스크 계정은
 // 마이페이지 탭 자체가 비활성이라 영향이 없다.
 const MYPAGE_SECTION = [
   '/check',
@@ -102,7 +102,7 @@ const NavigationBar = ({ locked = false }) => {
       <Navbar.Toggle />
       <Navbar.Collapse theme={MENU_THEME}>
         {/* 출석 체크용 아이디라면 */}
-        {loggedIn && serviceRole === 'RESIDENT' ? (
+        {loggedIn && serviceRole === 'KIOSK' ? (
           <>
             <Navbar.Link as={Link} to="/qrcheck" {...linkProps('/qrcheck')}>
               출석 체크

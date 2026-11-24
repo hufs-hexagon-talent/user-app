@@ -57,11 +57,11 @@ describe('Footer 이용 규칙 링크', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/notice');
   });
 
-  // 마이페이지가 없는 RESIDENT 도 같은 이유로 포함한다. 역할로 감싸면 회귀다.
+  // 마이페이지가 없는 KIOSK 도 같은 이유로 포함한다. 역할로 감싸면 회귀다.
   it.each([
     ['일반 사용자', 'USER'],
     ['이용 정지된 사용자', 'BLOCKED'],
-    ['관리실 계정', 'RESIDENT'],
+    ['키오스크 계정', 'KIOSK'],
     ['관리자', 'ADMIN'],
   ])('%s 에게도 보인다', (_label, role) => {
     renderFooter({
