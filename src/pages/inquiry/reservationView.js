@@ -103,3 +103,7 @@ export const groupByDate = list => {
   });
   return groups;
 };
+
+export const canOpenReservationQr = reservation =>
+  reservation.reservationState === 'NOT_VISITED' &&
+  new Date(reservation.reservationEndTime).getTime() >= Date.now();

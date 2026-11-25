@@ -9,7 +9,7 @@ import {
 import { format } from 'date-fns';
 import { Button, Modal, Table } from 'flowbite-react';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMyInquiries } from '../../api/inquiry.api';
 import {
   useNoShow,
@@ -28,6 +28,8 @@ import {
   reservationStateLabel,
   sortReservationsLatestFirst,
 } from '../inquiry/reservationView';
+import ReservationScanHistory from './ReservationScanHistory';
+import { canOpenReservationQr } from '../inquiry/reservationView';
 import { cancelReservationErrorMessage } from './cancelReservationMessage';
 
 const Check = () => {
@@ -55,7 +57,9 @@ const Check = () => {
   // 실제 차단은 동기 래치가 한다.
   const deletingRef = useRef(false);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [params, setParams] = useSearchParams();
+  const currentPage = Math.max(1, Number(params.get('page')) || 1);
+  const [record, setRecord] = useState(null);
   const itemsPerPage = 5;
   const [anchorEl, setAnchorEl] = useState(null);
   const [openModal, setOpenModal] = useState(null);
@@ -102,7 +106,7 @@ const Check = () => {
   };
 
   const handlePageChange = (event, value) => {
-    setCurrentPage(value);
+    setParams(value > 1 ? { page: String(value) } : {}, { replace: true });
   };
 
   // 예약 → 그 예약의 문의 번호. 상세로 곧장 보내려면 id 가 필요하다. 한 예약에 문의가 여럿이면
@@ -245,13 +249,13 @@ const Check = () => {
                   </Table.Row>
                 )}
               {hasReservations &&
-                paginatedReservations.map((reservation, index) => {
+                paginatedReservations.map(reservation => {
                   const start = new Date(reservation.reservationStartTime);
                   const end = new Date(reservation.reservationEndTime);
                   const isPast = start < new Date();
                   return (
                     <Table.Row
-                      key={index}
+                      key={reservation.reservationId}
                       className="bg-white dark:border-gray-700 dark:bg-gray-800 text-center text-gray-900">
                       <Table.Cell className="whitespace-nowrap px-2 py-4">
                         {reservationStateLabel(reservation) === '처리됨' ? (
@@ -267,14 +271,21 @@ const Check = () => {
                         ) : (
                           reservationStateLabel(reservation)
                         )}
+                        <button
+                          type="button"
+                          className="block mx-auto py-1 text-sm underline"
+                          onClick={() => setRecord(reservation)}
+                          aria-label={`${formatReservationTime(reservation)} ${formatRoom(reservation)} 출석 기록`}>
+                          출석 기록
+                        </button>
                       </Table.Cell>
-                      <Table.Cell className="px-2 py-4">
+                      <Table.Cell className="whitespace-nowrap px-1 py-4 sm:px-2">
                         {formatRoom(reservation)}
                       </Table.Cell>
-                      <Table.Cell className="px-2 py-4">
+                      <Table.Cell className="whitespace-nowrap px-1 py-4 sm:px-2">
                         {format(start, 'MM-dd')}
                       </Table.Cell>
-                      <Table.Cell className="px-2 py-4">
+                      <Table.Cell className="whitespace-nowrap px-1 py-4 sm:px-2">
                         {format(start, 'HH:mm')}
                       </Table.Cell>
                       {/* 날짜 열이 시작일을 보이므로 종료는 시각만 적는다. 자정에 끝나면 '24:00' 이다. */}
@@ -283,7 +294,14 @@ const Check = () => {
                       </Table.Cell>
                       <Table.Cell className="px-2 py-1">
                         {/* 44px 클릭 영역은 유지하고 여백을 줄여 기존 출석 행 높이에 맞춘다. */}
-                        <div className="flex min-h-[44px] items-center justify-center whitespace-nowrap">
+                        <div className="flex min-h-[44px] flex-wrap items-center justify-center whitespace-nowrap">
+                          {canOpenReservationQr(reservation) && (
+                            <Link
+                              className="inline-flex items-center min-h-[44px] px-1 font-medium underline"
+                              to={`/otp?reservationId=${reservation.reservationId}&page=${safePage}`}>
+                              출석 QR
+                            </Link>
+                          )}
                           {/* 지난 미출석·처리됨은 문의로, 앞으로의 예약은 삭제로. 삭제 조건은 현행 그대로 —
                             시작 15분 전 체크인으로 VISITED 인데 아직 시작 전인 행이 있다. */}
                           {isDisputable(reservation)
@@ -313,6 +331,13 @@ const Check = () => {
             </Table.Body>
           </Table>
         </div>
+      )}
+
+      {record && (
+        <ReservationScanHistory
+          reservation={record}
+          onClose={() => setRecord(null)}
+        />
       )}
 
       {!isReservationsEmpty && (

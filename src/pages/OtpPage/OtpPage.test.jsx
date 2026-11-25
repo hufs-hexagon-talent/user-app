@@ -7,7 +7,18 @@ const { mockUseOtp } = vi.hoisted(() => {
 });
 import React from 'react';
 import { act, render, screen } from '@testing-library/react';
-import OtpPage from './OtpPage';
+import { ReservationQrCode } from './OtpPage';
+const OtpPage = () => (
+  <ReservationQrCode
+    reservation={{
+      reservationId: 1,
+      roomName: '306',
+      partitionNumber: '1',
+      reservationStartTime: T0,
+      reservationEndTime: T0 + 3600000,
+    }}
+  />
+);
 vi.mock('qrcode.react', () => ({
   __esModule: true,
   default: ({ value }) => <div data-testid="qr">{value}</div>,
