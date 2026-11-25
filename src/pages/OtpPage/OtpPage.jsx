@@ -3,7 +3,13 @@ import QRCode from 'qrcode.react';
 import { Button } from 'flowbite-react';
 import { RotateCw } from 'lucide-react';
 
-import { useMyInfo } from '../../api/user.api';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useUserReservation } from '../../api/reservation.api';
+import {
+  canOpenReservationQr,
+  formatReservationTime,
+  formatRoom,
+} from '../inquiry/reservationView';
 import { useOtp } from '../../api/checkin.api';
 import {
   getOtpView,
@@ -44,11 +50,10 @@ const TimerCircularProgressBar = ({ radius, strokeWidth, progress }) => {
   );
 };
 
-const Qrcode = () => {
+export const ReservationQrCode = ({ reservation }) => {
   const [now, setNow] = useState(() => Date.now());
   const [radius, setRadius] = useState(170);
 
-  const { data: me } = useMyInfo();
   const {
     data: otp,
     refetch,
@@ -56,7 +61,7 @@ const Qrcode = () => {
     isPending,
     isError,
     isFetching,
-  } = useOtp();
+  } = useOtp(reservation.reservationId);
 
   // 값이 없거나 만료된 QR 은 대봐야 출석이 되지 않는다. 정상처럼 보이는 QR 을
   // 그려두면 학생이 그대로 대다가 출석 시간을 넘기므로 아예 그리지 않는다.
@@ -87,11 +92,14 @@ const Qrcode = () => {
 
   useEffect(() => {
     const handleResize = () => {
-      const newRadius = window.innerWidth <= 320 ? 140 : 170;
+      const newRadius = Math.min(
+        170,
+        Math.max(100, (window.innerWidth - 48) / 2),
+      );
       setRadius(newRadius);
     };
 
-    handleResize(1162);
+    handleResize();
 
     window.addEventListener('resize', handleResize);
 
@@ -119,7 +127,13 @@ const Qrcode = () => {
 
   return (
     <div>
-      <div className="text-center text-3xl mt-20">{me?.name}님의 QR 코드</div>
+      <h1 className="text-center text-3xl mt-12">출석 QR</h1>
+      <p className="mt-3 text-center font-medium">
+        {reservation.roomName}호 · {reservation.partitionNumber}번 자리
+        <span className="mt-1 block text-sm font-normal">
+          {formatReservationTime(reservation)}
+        </span>
+      </p>
       <div className="flex justify-center mt-10 relative">
         <TimerCircularProgressBar
           radius={radius}
@@ -181,4 +195,79 @@ const Qrcode = () => {
   );
 };
 
-export default Qrcode;
+export default function OtpPage() {
+  const [params] = useSearchParams();
+  const id = params.get('reservationId');
+  const query = useUserReservation();
+  const choices = (query.data ?? [])
+    .filter(canOpenReservationQr)
+    .sort(
+      (a, b) =>
+        new Date(a.reservationStartTime) - new Date(b.reservationStartTime),
+    );
+  const selected = choices.find(row => String(row.reservationId) === id);
+  if (selected)
+    return (
+      <section className="mx-auto max-w-xl px-3 text-center">
+        <ReservationQrCode
+          key={selected.reservationId}
+          reservation={selected}
+        />
+        <Link className="inline-block p-3 font-medium underline" to="/otp">
+          다른 예약 선택
+        </Link>
+        <Link
+          className="inline-block p-3 font-medium underline"
+          to={historyUrl(params)}>
+          내 예약 조회
+        </Link>
+      </section>
+    );
+  return (
+    <section className="mx-auto my-12 max-w-xl px-5">
+      <h1 className="text-2xl font-semibold">출석 QR</h1>
+      <p className="mt-2 text-gray-700">
+        {query.isPending
+          ? '예약을 불러오는 중입니다.'
+          : query.isError
+            ? '예약을 불러오지 못했습니다.'
+            : id
+              ? '이 예약의 QR을 열 수 없습니다.'
+              : choices.length
+                ? 'QR을 열 예약을 선택해 주세요.'
+                : '출석 QR을 열 수 있는 예약이 없습니다.'}
+      </p>
+      {query.isError && (
+        <button className="p-3 underline" onClick={() => query.refetch()}>
+          다시 시도
+        </button>
+      )}
+      <ul className="mt-5 divide-y border-y">
+        {choices.map(row => (
+          <li key={row.reservationId}>
+            <Link
+              className="block py-4 hover:underline focus-visible:outline"
+              to={`/otp?reservationId=${row.reservationId}&page=${Number(params.get('page')) || 1}`}>
+              <strong>{formatRoom(row)}</strong>
+              <span className="block text-sm">
+                {formatReservationTime(row)}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link
+        className="mt-4 inline-block py-3 underline"
+        to={historyUrl(params)}>
+        내 예약 조회
+      </Link>
+    </section>
+  );
+}
+
+function historyUrl(params) {
+  const page = Number(params.get('page'));
+  return page > 1 && Number.isSafeInteger(page)
+    ? `/check?page=${page}`
+    : '/check';
+}
